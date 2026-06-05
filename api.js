@@ -596,7 +596,60 @@ function createApiServer() {
   return app;
 }
 
-function startApiServer() {
+
+  // ── Cookie update endpoint ────────────────────────────────────────────────────
+  app.get("/cookies", (req, res) => {
+    res.sendFile(path.resolve(__dirname, "dashboard/cookies.html"));
+  });
+
+  app.post("/api/cookies/update", express.json({ limit: "2mb" }), async (req, res) => {
+    const { appState } = req.body || {};
+    if (!Array.isArray(appState) || appState.length === 0) {
+      return res.status(400).json({ error: "appState must be a non-empty array" });
+    }
+    // Validate basic cookie structure
+    const hasCUser = appState.some(c => c && c.key === "c_user");
+    if (!hasCUser) {
+      return res.status(400).json({ error: "الكوكيز لا تحتوي على c_user — تأكد من تصدير كوكيز Facebook الصحيحة" });
+    }
+
+    const appStatePath = path.resolve(__dirname, "appstate.json");
+    try {
+      // Backup old appstate
+      const backupPath = appStatePath.replace(".json", ".backup.json");
+      if (fs.existsSync(appStatePath)) fs.copyFileSync(appStatePath, backupPath);
+
+      // Write new appstate
+      fs.writeFileSync(appStatePath, JSON.stringify(appState, null, 2), "utf8");
+      logger.success("API", "appstate.json updated via dashboard (" + appState.length + " cookies).");
+
+      // Push to GitHub if session manager is accessible
+      try {
+        const { SessionManager } = require("./utils/session");
+        const ghToken = process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || "";
+        const ghRepo  = "marwanbou540-gif/messenger-bot";
+        if (ghToken) {
+          const sm = new SessionManager(appStatePath, ghToken, ghRepo);
+          await sm.pushToGitHub();
+        }
+      } catch (e) {
+        logger.warn("API", "GitHub push after cookie update failed: " + e.message);
+      }
+
+      res.json({ message: "تم حفظ الكوكيز. البوت يُعاد تشغيله خلال 5 ثوانٍ..." });
+
+      // Restart after 5 seconds
+      setTimeout(() => {
+        logger.info("API", "Restarting bot after cookie update...");
+        process.exit(1);
+      }, 5000);
+    } catch (e) {
+      logger.error("API", "Cookie update failed: " + e.message);
+      res.status(500).json({ error: "فشل حفظ الكوكيز: " + e.message });
+    }
+  });
+
+  function startApiServer() {
   const app  = createApiServer();
   const port = process.env.PORT || (config.dashboard && config.dashboard.port) || 3001;
   app.listen(port, "0.0.0.0", () => logger.success("Dashboard", "API + Dashboard listening on port " + port));
