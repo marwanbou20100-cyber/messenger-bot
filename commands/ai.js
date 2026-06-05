@@ -9,33 +9,40 @@
     groupOnly: false,
 
     async execute({ api, event, args }) {
-      const { threadID, messageID } = event;
+      const { threadID } = event;
 
       if (!args.length) {
-        return api.sendMessage("❓ اكتب سؤالك بعد الأمر.\nمثال: -ai ما هو الذكاء الاصطناعي؟", threadID, messageID);
+        return api.sendMessage(
+          "❓ اكتب سؤالك بعد الأمر.\nمثال: -ai ما هو الذكاء الاصطناعي؟",
+          threadID
+        );
       }
 
       const prompt = args.join(" ");
-      api.sendMessage("⏳ جاري التفكير...", threadID);
+      await api.sendMessage("⏳ جاري التفكير...", threadID).catch(() => {});
 
       try {
-        const systemPrompt = "أنت مساعد ذكي اسمك Madox. أجب باللغة التي يكتب بها المستخدم. كن مختصراً ومفيداً.";
-        const url = `https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=openai&system=${encodeURIComponent(systemPrompt)}`;
+        const system = "أنت مساعد ذكي اسمك Madox. أجب باللغة التي يكتب بها المستخدم. كن مختصراً ومفيداً.";
+        const url =
+          "https://text.pollinations.ai/" +
+          encodeURIComponent(prompt) +
+          "?model=openai&system=" +
+          encodeURIComponent(system);
 
         const res = await fetch(url, {
           headers: { "User-Agent": "Madox-Bot/2.1" },
-          signal: AbortSignal.timeout(30000)
+          signal: AbortSignal.timeout(30000),
         });
 
-        if (!res.ok) throw new Error("API error: " + res.status);
+        if (!res.ok) throw new Error("خطأ في الخادم: " + res.status);
 
-        const text = await res.text();
-        const reply = text.trim() || "لم أحصل على رد. حاول مجدداً.";
+        const text = (await res.text()).trim();
+        if (!text) throw new Error("لم يُرسل الذكاء الاصطناعي رداً");
 
-        return api.sendMessage("🤖 " + reply, threadID, messageID);
+        return api.sendMessage("🤖 " + text, threadID);
       } catch (e) {
-        return api.sendMessage("❌ حدث خطأ: " + e.message, threadID, messageID);
+        return api.sendMessage("❌ حدث خطأ: " + e.message, threadID).catch(() => {});
       }
-    }
+    },
   };
   
