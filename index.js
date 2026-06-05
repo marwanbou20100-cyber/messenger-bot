@@ -87,22 +87,26 @@ function isBotAdmin(senderID) {
 }
 
 async function isThreadAdmin(api, senderID, threadID) {
-  try {
-    const info     = await api.getThreadInfo(threadID);
-    const adminIDs = (info.adminIDs || []).map(a => a.id);
-    if (info.name && groupsCache.has(threadID)) {
-      const cached = groupsCache.get(threadID);
-      groupsCache.set(threadID, {
-        ...cached,
-        name:        info.name,
-        memberCount: info.participantIDs ? info.participantIDs.length : cached.memberCount,
-      });
+    const hit = adminCache.get(threadID, senderID);
+    if (hit !== null) return hit;
+    try {
+      const info     = await api.getThreadInfo(threadID);
+      const adminIDs = (info.adminIDs || []).map(a => a.id);
+      if (info.name && groupsCache.has(threadID)) {
+        const cached = groupsCache.get(threadID);
+        groupsCache.set(threadID, {
+          ...cached,
+          name:        info.name,
+          memberCount: info.participantIDs ? info.participantIDs.length : cached.memberCount,
+        });
+      }
+      const result = adminIDs.includes(senderID);
+      adminCache.set(threadID, senderID, result);
+      return result;
+    } catch {
+      return false;
     }
-    return adminIDs.includes(senderID);
-  } catch {
-    return false;
   }
-}
 
 // ── Template formatter ────────────────────────────────────────────────────────
 function fmt(template, vars) {
