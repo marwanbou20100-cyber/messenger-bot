@@ -21,7 +21,7 @@
     "greetNewMembers": false,
     "farewellMembers": false,
     "antiSpam": true,
-    "antiSpamCooldownMs": 3000,
+    "antiSpamCooldownMs": 2000,
     "logMessages": true
   },
   "humanSimulator": {
@@ -51,13 +51,13 @@
     "selfListen": false,
     "listenEvents": true,
     "listenTyping": false,
-    "autoMarkRead": true,
+    "autoMarkRead": false,
     "autoMarkDelivery": false,
     "autoReconnect": true,
-    "simulateTyping": true,
+    "simulateTyping": false,
     "forceLogin": false,
-    "maxConcurrentRequests": 5,
-    "maxRequestsPerMinute": 40,
-    "requestCooldownMs": 60000
+    "maxConcurrentRequests": 3,
+    "maxRequestsPerMinute": 30,
+    "requestCooldownMs": 2000
   }
 }
