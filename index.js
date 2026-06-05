@@ -26,6 +26,7 @@ const { lockedThreads, mutedThreads, groupsCache, autoReplies, groupStats, reply
 const { setBotApi, setBotStatus, logActivity, logViolation, startApiServer, setCookieRefresher } = require("./api");
 const pendingReplies = require("./utils/pendingReplies");
 const threadScanner  = require("./utils/threadScanner");
+const adminCache     = require("./utils/threadAdminCache");
 
 // ── Config constants ──────────────────────────────────────────────────────────
 const APP_STATE_PATH = path.resolve(__dirname, config.appStatePath);
