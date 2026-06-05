@@ -47,9 +47,13 @@ scheduleMaintenance();
 health.start({
   diagnostics,
   onCritical: async (type, report) => {
-    logger.error("Bot", "Health critical event: " + type, report);
-    await diagnostics.createSnapshot("health_" + type);
-  },
+      logger.error("Bot", "Health critical event: " + type, report);
+      await diagnostics.createSnapshot("health_" + type).catch(() => {});
+      if (type === "memory_critical") {
+        logger.error("Bot", "Memory critical — restarting process in 5s...");
+        setTimeout(() => process.exit(1), 5000);
+      }
+    },
 });
 
 // ── Command loader ─────────────────────────────────────────────────────────────
@@ -107,7 +111,7 @@ function fmt(template, vars) {
 // ── MQTT reconnect watchdog ───────────────────────────────────────────────────
 let _lastEventAt    = Date.now();
 let _mqttErrorCount = 0;
-const MQTT_STALE_MS = 10 * 60 * 1000;
+const MQTT_STALE_MS = 4 * 60 * 1000;
 let _mqttWatchdog   = null;
 
 function startMqttWatchdog(reconnectFn) {
@@ -298,7 +302,27 @@ async function handleEvent(api, event) {
   }
 }
 
-// ── Bot launcher with exponential backoff ─────────────────────────────────────
+
+  // ── Keepalive ping every 2 minutes ───────────────────────────────────────────
+  let _keepaliveTimer = null;
+  function startKeepalive(api) {
+    if (_keepaliveTimer) clearInterval(_keepaliveTimer);
+    _keepaliveTimer = setInterval(async () => {
+      try {
+        await api.getUserInfo([api.getCurrentUserID()]);
+        _lastEventAt = Date.now();
+        logger.debug("Keepalive", "Ping OK");
+      } catch (e) {
+        logger.warn("Keepalive", "Ping failed: " + e.message);
+      }
+    }, 2 * 60 * 1000);
+    if (_keepaliveTimer.unref) _keepaliveTimer.unref();
+  }
+  function stopKeepalive() {
+    if (_keepaliveTimer) { clearInterval(_keepaliveTimer); _keepaliveTimer = null; }
+  }
+
+  // ── Bot launcher with exponential backoff ─────────────────────────────────────
 let _restartAttempt = 0;
 const MAX_RESTART_DELAY = 300000;
 
@@ -372,6 +396,7 @@ function startBot() {
     threadScanner.setApi(api);
     setBotStatus("online");
     nicknameLocks.setApi(api);
+    startKeepalive(api);
 
     if (config.humanSimulator && config.humanSimulator.enabled) {
       humanSimulator.start(api, config.humanSimulator);
@@ -401,6 +426,7 @@ function startBot() {
       setBotStatus("offline — reconnecting...");
       cookieRefresher.stop();
       humanSimulator.stop();
+      stopKeepalive();
       setTimeout(startBot, 5000);
     });
 
@@ -409,7 +435,7 @@ function startBot() {
         _mqttErrorCount++;
         logger.warn("MQTT", "Listen error #" + _mqttErrorCount + ": " + (mqttErr.message || mqttErr));
         diagnostics.recordError("MQTT", mqttErr instanceof Error ? mqttErr : new Error(String(mqttErr)));
-        if (_mqttErrorCount >= 5) {
+        if (_mqttErrorCount >= 3) {
           logger.error("MQTT", "5 consecutive errors — forcing reconnect.");
           if (_mqttWatchdog) { clearInterval(_mqttWatchdog); _mqttWatchdog = null; }
           setBotStatus("offline — reconnecting...");
@@ -449,8 +475,8 @@ process.on("unhandledRejection", (reason) => {
   diagnostics.recordError("Process", reason instanceof Error ? reason : new Error(msg));
 });
 
-process.on("SIGINT",  () => { cookieRefresher.stop(); humanSimulator.stop(); logger.info("Bot", "SIGINT — shutting down."); process.exit(0); });
-process.on("SIGTERM", () => { cookieRefresher.stop(); humanSimulator.stop(); logger.info("Bot", "SIGTERM — shutting down."); process.exit(0); });
+process.on("SIGINT",  () => { cookieRefresher.stop(); humanSimulator.stop(); stopKeepalive(); logger.info("Bot", "SIGINT — shutting down."); process.exit(0); });
+process.on("SIGTERM", () => { cookieRefresher.stop(); humanSimulator.stop(); stopKeepalive(); logger.info("Bot", "SIGTERM — shutting down."); process.exit(0); });
 
 // ── Start everything ──────────────────────────────────────────────────────────
 startApiServer();
