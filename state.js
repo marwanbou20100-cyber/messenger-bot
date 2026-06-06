@@ -8,7 +8,8 @@ const DATA_DIR   = path.resolve(__dirname, "data");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
 try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
 
-const lockedThreads  = new Set();
+const lockedThreads      = new Set();
+const totalLockedThreads = new Set(); // قفل تام — bot admin only
 const mutedThreads   = new Map();
 const groupsCache    = new Map();
 const activityLog    = [];
@@ -30,6 +31,7 @@ function evictStaleGroups() {
       groupStats.delete(tid);
       autoReplies.delete(tid);
       lockedThreads.delete(tid);
+      totalLockedThreads.delete(tid);
       mutedThreads.delete(tid);
       evicted++;
     }
@@ -43,6 +45,7 @@ function _serialize() {
     version:     2,
     savedAt:     Date.now(),
     lockedThreads: [...lockedThreads],
+    totalLockedThreads: [...totalLockedThreads],
     mutedThreads:  [...mutedThreads.entries()].filter(([, exp]) => exp > Date.now()),
     groupsCache:   [...groupsCache.entries()],
     groupStats:    [...groupStats.entries()],
@@ -73,6 +76,7 @@ function load() {
     if (!data || data.version !== 2) { logger.warn("State", "State version mismatch — resetting."); return; }
     const now = Date.now();
     for (const tid of (data.lockedThreads || []))           lockedThreads.add(tid);
+    for (const tid of (data.totalLockedThreads || []))  totalLockedThreads.add(tid);
     for (const [tid, exp] of (data.mutedThreads || []))     if (exp > now) mutedThreads.set(tid, exp);
     for (const [tid, info] of (data.groupsCache || []))     groupsCache.set(tid, info);
     for (const [tid, stats] of (data.groupStats || []))     groupStats.set(tid, stats);
@@ -99,4 +103,4 @@ process.on("SIGTERM", save);
 process.on("exit",    save);
 load();
 
-module.exports = { lockedThreads, mutedThreads, groupsCache, activityLog, lockViolations, autoReplies, groupStats, replyDelay, save, load, evictStaleGroups };
+module.exports = { lockedThreads, totalLockedThreads, mutedThreads, groupsCache, activityLog, lockViolations, autoReplies, groupStats, replyDelay, save, load, evictStaleGroups };
