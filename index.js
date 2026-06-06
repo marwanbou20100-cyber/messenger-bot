@@ -484,8 +484,17 @@ process.on("unhandledRejection", (reason) => {
   diagnostics.recordError("Process", reason instanceof Error ? reason : new Error(msg));
 });
 
-process.on("SIGINT",  () => { cookieRefresher.stop(); humanSimulator.stop(); stopKeepalive(); logger.info("Bot", "SIGINT — shutting down."); process.exit(0); });
-process.on("SIGTERM", () => { cookieRefresher.stop(); humanSimulator.stop(); stopKeepalive(); logger.info("Bot", "SIGTERM — shutting down."); process.exit(0); });
+async function _gracefulShutdown(sig) {
+  logger.info("Bot", sig + " received — saving session before exit...");
+  try { if (typeof cookieRefresher.emergencyFlush === "function") await cookieRefresher.emergencyFlush(); } catch {}
+  cookieRefresher.stop();
+  humanSimulator.stop();
+  stopKeepalive();
+  logger.info("Bot", "Graceful shutdown complete ✅");
+  process.exit(0);
+}
+process.on("SIGINT",  () => _gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => _gracefulShutdown("SIGTERM"));
 
 // ── Start everything ──────────────────────────────────────────────────────────
 startApiServer();
