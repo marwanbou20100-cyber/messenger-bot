@@ -25,6 +25,7 @@ const DEFAULT_CONFIG = {
   maxTypingMs:         5_000,         // max typing duration ms
   maxGroupsPerCycle:   3,             // threads per read cycle
   browseBatchSize:     6,             // threads per browse session
+  reelsIntervalMs:    60 * 60_000,   // reels simulation every 60 min
 };
 
 let _api     = null;
@@ -37,6 +38,7 @@ let _stats   = {
   typingSimulated: 0,
   threadsRead:     0,
   browseSessions:  0,
+  reelsSessions:   0,
   lastActionAt:    null,
   lastActionType:  null,
 };
@@ -168,7 +170,61 @@ function _doBrowse() {
   }, _jitter(_cfg.browseIntervalMs));
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
+
+  // ── 5. Reels / Homepage simulation ───────────────────────────────────────────
+  // Simulates the bot owner browsing Facebook Reels and the homepage.
+  // Uses sequences of getUserInfo + markAsRead + typing to mimic scrolling behavior.
+  // This makes the account look active to Facebook's anti-bot systems.
+  function _doReels() {
+    _schedule(async () => {
+      if (!_running || !_api) return;
+      try {
+        const botID    = _api.getCurrentUserID();
+        const threads  = _randomGroupIDs(3);
+
+        logger.debug("HumanSim", "Reels/homepage simulation started");
+
+        // Phase 1: Check own profile (like opening Reels)
+        try { await _api.getUserInfo([botID]); } catch {}
+        await _sleep(2_000, 5_000);
+
+        // Phase 2: Scroll through threads (simulates Reels feed scrolling)
+        for (const tid of threads) {
+          if (!_running) break;
+          try {
+            // Mark thread as read (simulates viewing a Reel / post)
+            await _api.markAsRead(tid, true);
+            await _sleep(3_000, 12_000); // watching a Reel
+
+            // 40% chance: type something then abandon (like starting a comment)
+            if (Math.random() < 0.40) {
+              try {
+                const stopFn = await _api.sendTypingIndicator(tid);
+                await _sleep(1_500, 4_000);
+                if (typeof stopFn === "function") stopFn();
+              } catch {}
+            }
+
+            await _sleep(1_000, 3_000); // scroll to next
+          } catch {}
+        }
+
+        // Phase 3: Brief presence update (returning to Messenger)
+        try {
+          if (typeof _api.setOptions === "function") _api.setOptions({ online: true });
+        } catch {}
+
+        _stats.reelsSessions++;
+        _record("reels");
+        logger.debug("HumanSim", `Reels session #${_stats.reelsSessions} complete`);
+      } catch (e) {
+        logger.debug("HumanSim", `Reels error: ${e.message}`);
+      }
+      _doReels();
+    }, _jitter(_cfg.reelsIntervalMs || 60 * 60_000));
+  }
+
+  // ── Public API ────────────────────────────────────────────────────────────────
 function start(api, userConfig = {}) {
   if (_running) stop();
   _api     = api;
@@ -191,6 +247,7 @@ function start(api, userConfig = {}) {
     [_doTyping,   100_000 + Math.floor(Math.random() * 30_000)],
     [_doRead,      35_000 + Math.floor(Math.random() * 15_000)],
     [_doBrowse,   300_000 + Math.floor(Math.random() * 60_000)],
+    [_doReels,    600_000 + Math.floor(Math.random() * 120_000)], // 10-12 min initial delay
   ];
   for (const [fn, offset] of stagger) {
     const t = setTimeout(fn, offset);
@@ -204,6 +261,7 @@ function start(api, userConfig = {}) {
     `typing:${_cfg.typingIntervalMs / 60_000}m`,
     `read:${_cfg.readIntervalMs / 60_000}m`,
     `browse:${_cfg.browseIntervalMs / 60_000}m`,
+    `reels:${(_cfg.reelsIntervalMs || 3600000) / 60_000}m`,
   ].join(" "));
 }
 
