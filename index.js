@@ -425,6 +425,7 @@ function startBot() {
       cookieRefresher.stop();
       await diagnostics.createSnapshot("relogin_failure");
       logger.info("Bot", "Will restart process in 60s...");
+      try { if (typeof cookieRefresher.emergencyFlush === "function") await cookieRefresher.emergencyFlush(); } catch {}
       setTimeout(() => process.exit(1), 60000);
     };
 
