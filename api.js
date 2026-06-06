@@ -593,9 +593,6 @@ function createApiServer() {
     catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  return app;
-}
-
 
   // ── Cookie update endpoint ────────────────────────────────────────────────────
   app.get("/cookies", (req, res) => {
@@ -648,6 +645,10 @@ function createApiServer() {
       res.status(500).json({ error: "فشل حفظ الكوكيز: " + e.message });
     }
   });
+
+
+  return app;
+}
 
   function startApiServer() {
   const app  = createApiServer();
