@@ -1,114 +1,100 @@
 "use strict";
-const config      = require("../config.json");
-const warnManager = require("../utils/warnManager");
+  const fs     = require("fs");
+  const path   = require("path");
+  const config = require("../config.json");
+  const fmt    = require("../utils/fmt");
 
-const MAX_WARNS = 3;  // auto-kick threshold
+  const FILE    = path.resolve(__dirname, "../data/warns.json");
+  const MAX     = 3;
 
-module.exports = {
-  name: "warn",
-  aliases: ["w", "تحذير"],
-  description: "إصدار تحذير لعضو. عند بلوغ الحد الأقصى يُطرد تلقائياً.",
-  usage: [
-    "-warn @شخص [سبب]      — إصدار تحذير",
-    "-warn check @شخص      — عرض تحذيرات عضو",
-    "-warn clear @شخص      — مسح تحذيرات عضو",
-    "-warn clearall         — مسح جميع تحذيرات المجموعة",
-    "-warn list             — قائمة جميع التحذيرات",
-  ].join("\n"),
-  category: "Admin",
-  groupOnly: true,
-  adminOnly: true,
+  function _load() {
+    try { return JSON.parse(fs.readFileSync(FILE, "utf8")); } catch { return {}; }
+  }
+  function _save(d) {
+    try { fs.mkdirSync(path.dirname(FILE), { recursive: true }); fs.writeFileSync(FILE, JSON.stringify(d, null, 2)); } catch {}
+  }
 
-  async execute({ api, event, args }) {
-    const { threadID, senderID } = event;
-    const sub        = (args[0] || "").toLowerCase();
-    const mentions   = event.mentions || {};
-    const mentionIDs = Object.keys(mentions);
-    const prefix     = config.prefix;
+  module.exports = {
+    name: "warn",
+    aliases: ["warning", "warns", "unwarn", "تحذير"],
+    description: "تحذير عضو. عند الوصول لـ 3 تحذيرات يُطرد.",
+    usage: "warn @شخص [سبب]  |  warns @شخص  |  unwarn @شخص",
+    category: "Group",
+    groupOnly: true,
+    adminOnly: true,
 
-    // ── check ────────────────────────────────────────────────────────────────
-    if (sub === "check") {
-      if (!mentionIDs.length) return api.sendMessage(`❌ اذكر عضواً.\nمثال: ${prefix}warn check @شخص`, threadID);
-      const uid = mentionIDs[0];
-      const w   = warnManager.getWarns(threadID, uid);
-      const name = (Object.values(mentions)[0] || "").replace(/@/, "") || uid;
-      if (w.count === 0) return api.sendMessage(`✅ لا توجد تحذيرات لـ ${name}.`, threadID);
-      const lines = w.reasons.slice(-5).map((r, i) => `${i + 1}. ${r.reason} (${new Date(r.at).toLocaleDateString("ar-SA")})`);
-      return api.sendMessage(
-        `⚠️ تحذيرات ${name}: ${w.count}/${MAX_WARNS}\n━━━━━━━━━━━\n${lines.join("\n")}`,
-        threadID
-      );
-    }
+    async execute({ api, event, args }) {
+      const { threadID, senderID, mentions } = event;
+      const sub      = (args[0] || "").toLowerCase().replace(/^-+/, "");
+      const warnings = _load();
+      const gKey     = threadID;
+      if (!warnings[gKey]) warnings[gKey] = {};
 
-    // ── clear ────────────────────────────────────────────────────────────────
-    if (sub === "clear") {
-      if (!mentionIDs.length) return api.sendMessage(`❌ اذكر عضواً.\nمثال: ${prefix}warn clear @شخص`, threadID);
-      const uid  = mentionIDs[0];
-      const name = (Object.values(mentions)[0] || "").replace(/@/, "") || uid;
-      warnManager.clearWarns(threadID, uid);
-      return api.sendMessage(`✅ تم مسح تحذيرات ${name}.`, threadID);
-    }
-
-    // ── clearall ──────────────────────────────────────────────────────────────
-    if (sub === "clearall") {
-      warnManager.clearWarns(threadID, null);
-      return api.sendMessage("✅ تم مسح جميع التحذيرات في هذه المجموعة.", threadID);
-    }
-
-    // ── list ──────────────────────────────────────────────────────────────────
-    if (sub === "list") {
-      const all = warnManager.listWarns(threadID);
-      if (!all.length) return api.sendMessage("✅ لا توجد تحذيرات في هذه المجموعة.", threadID);
-      const lines = all
-        .sort((a, b) => b.count - a.count)
-        .map(w => `• ${w.userID}: ${w.count}/${MAX_WARNS} تحذير`);
-      return api.sendMessage(`⚠️ التحذيرات النشطة (${all.length}):\n━━━━━━━━━━━\n${lines.join("\n")}`, threadID);
-    }
-
-    // ── issue warn (default) ──────────────────────────────────────────────────
-    if (!mentionIDs.length) {
-      return api.sendMessage(`❌ اذكر عضواً.\nمثال: ${prefix}warn @شخص سبب التحذير`, threadID);
-    }
-
-    const uid    = mentionIDs[0];
-    const name   = (Object.values(mentions)[0] || "").replace(/@/, "") || uid;
-    const reason = args.slice(1).filter(a => !Object.values(mentions).includes(a)).join(" ").trim()
-      || "مخالفة قوانين المجموعة";
-
-    // Don't warn bot admins
-    const botAdmins = config.bot.adminIDs || [];
-    if (botAdmins.includes(String(uid))) {
-      return api.sendMessage("⛔ لا يمكن تحذير مشرف البوت.", threadID);
-    }
-
-    const w = warnManager.addWarn(threadID, uid, reason);
-
-    if (w.count >= MAX_WARNS) {
-      // Auto-kick
-      try {
-        await api.gcmember("remove", uid, threadID);
-        warnManager.clearWarns(threadID, uid);
-        return api.sendMessage(
-          `🚫 تم طرد ${name} تلقائياً بعد ${MAX_WARNS} تحذيرات.\n` +
-          `📝 السبب الأخير: ${reason}`,
-          threadID
-        );
-      } catch (e) {
-        return api.sendMessage(
-          `⚠️ ${name} بلغ الحد الأقصى (${MAX_WARNS}/${MAX_WARNS}) لكن الطرد فشل:\n${e.message}\n` +
-          `يُرجى طرده يدوياً.`,
-          threadID
-        );
+      // عرض التحذيرات
+      if (sub === "warns" || sub === "list") {
+        const targetID = Object.keys(mentions)[0] || args[1];
+        if (targetID) {
+          const w = warnings[gKey][targetID] || [];
+          const name = Object.values(mentions)[0] || targetID;
+          if (!w.length) return api.sendMessage(fmt.ok(name + " ليس لديه تحذيرات."), threadID);
+          const lines = [fmt.header(), "", fmt.row("المستخدم", name, "👤"), fmt.divider()];
+          w.forEach((r, i) => lines.push("  " + (i+1) + ".  " + r));
+          return api.sendMessage(lines.join("\n"), threadID);
+        }
+        // كل التحذيرات في المجموعة
+        const keys = Object.keys(warnings[gKey]);
+        if (!keys.length) return api.sendMessage(fmt.ok("لا توجد تحذيرات في هذه المجموعة."), threadID);
+        const lines = [fmt.header(), "", "⚠️  التحذيرات", fmt.divider()];
+        keys.forEach(id => {
+          const cnt = warnings[gKey][id]?.length || 0;
+          if (cnt > 0) lines.push("  " + id + "  (" + cnt + "/" + MAX + ")");
+        });
+        return api.sendMessage(lines.join("\n"), threadID);
       }
-    }
 
-    const remaining = MAX_WARNS - w.count;
-    api.sendMessage(
-      `⚠️ تحذير لـ ${name}\n` +
-      `📝 السبب: ${reason}\n` +
-      `⚡ التحذيرات: ${w.count}/${MAX_WARNS}` +
-      (remaining === 1 ? "\n🚨 تحذير واحد متبقٍ قبل الطرد!" : ""),
-      threadID
-    );
-  },
-};
+      const targetID = Object.keys(mentions)[0] || args[0];
+      if (!targetID) {
+        return api.sendMessage(fmt.err("حدد المستخدم.\n  " + config.prefix + "warn @شخص [سبب]"), threadID);
+      }
+      if (targetID === senderID) return api.sendMessage(fmt.err("لا يمكنك تحذير نفسك."), threadID);
+      if (config.bot.adminIDs.includes(targetID)) return api.sendMessage(fmt.err("لا يمكن تحذير المشرفين."), threadID);
+
+      // رفع التحذير
+      if (sub === "unwarn") {
+        if (!warnings[gKey][targetID]?.length) return api.sendMessage(fmt.ok("لا توجد تحذيرات لهذا المستخدم."), threadID);
+        warnings[gKey][targetID].pop();
+        _save(warnings);
+        const name = Object.values(mentions)[0] || targetID;
+        return api.sendMessage(fmt.ok("تم رفع آخر تحذير عن " + name), threadID);
+      }
+
+      // إضافة تحذير
+      const reason = args.slice(Object.keys(mentions).length ? 1 : 1).join(" ") || "بدون سبب";
+      const name   = Object.values(mentions)[0] || targetID;
+      if (!warnings[gKey][targetID]) warnings[gKey][targetID] = [];
+      warnings[gKey][targetID].push(reason);
+      _save(warnings);
+
+      const count = warnings[gKey][targetID].length;
+      const lines = [
+        fmt.header(),
+        "",
+        fmt.row("المحذَّر", name,              "⚠️"),
+        fmt.row("السبب",    reason,            "📝"),
+        fmt.row("التحذيرات", count + " / " + MAX, "🔢"),
+      ];
+
+      if (count >= MAX) {
+        lines.push("", fmt.divider(), "⛔  تجاوز الحد — جاري الطرد...");
+        api.sendMessage(lines.join("\n"), threadID);
+        try { await api.removeUserFromGroup(targetID, threadID); }
+        catch (e) { api.sendMessage(fmt.err("تعذّر الطرد: " + e.message), threadID); }
+        warnings[gKey][targetID] = [];
+        _save(warnings);
+      } else {
+        lines.push("", fmt.wrn("تحذير " + count + " من " + MAX));
+        api.sendMessage(lines.join("\n"), threadID);
+      }
+    },
+  };
+  
