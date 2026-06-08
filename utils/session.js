@@ -209,9 +209,64 @@
       process.exit(1);
     }
 
+    // ── Cookie expiry pruning ─────────────────────────────────────────────────
+    /**
+     * pruneExpired — removes expired + duplicate cookies before every save.
+     *
+     * Rules:
+     *  - expirationDate < now → EXPIRED → remove
+     *    (CRITICAL cookies kept even if expired — Facebook refreshes them on next request)
+     *  - Duplicate key+domain → keep the newest one
+     */
+    pruneExpired(state) {
+      if (!Array.isArray(state)) return { kept: state, removed: 0 };
+
+      // These are never removed — deleting them breaks login
+      const CRITICAL = new Set(["c_user", "xs", "fr", "datr", "sb", "dbln", "ps_n", "ps_l", "wd", "presence"]);
+      const nowSec   = Date.now() / 1000;
+      const kept     = [];
+      const seen     = new Map();   // "key::domain" → index in kept
+      let   removed  = 0;
+
+      for (const cookie of state) {
+        if (!cookie || !cookie.key) continue;
+
+        // ── Expiry check ────────────────────────────────────────────────────
+        if (!CRITICAL.has(cookie.key) && cookie.expirationDate && cookie.expirationDate < nowSec) {
+          removed++;
+          logger.debug("Session",
+            `Pruned expired cookie: ${cookie.key} (expired ${new Date(cookie.expirationDate * 1000).toISOString()})`
+          );
+          continue;
+        }
+
+        // ── Deduplication: same key+domain → keep newest by lastAccessed ───
+        const uid       = (cookie.key || "") + "::" + (cookie.domain || "");
+        const thisMs    = cookie.lastAccessed ? new Date(cookie.lastAccessed).getTime() : 0;
+        if (seen.has(uid)) {
+          const prevIdx = seen.get(uid);
+          const prevMs  = kept[prevIdx].lastAccessed ? new Date(kept[prevIdx].lastAccessed).getTime() : 0;
+          if (thisMs >= prevMs) { removed++; kept[prevIdx] = cookie; }
+          else                  { removed++; }
+        } else {
+          seen.set(uid, kept.length);
+          kept.push(cookie);
+        }
+      }
+
+      if (removed > 0) {
+        logger.info("Session", `Auto-pruned ${removed} expired/duplicate cookie(s). ${kept.length} remain.`);
+      }
+      return { kept, removed };
+    }
+
     // ── Save ──────────────────────────────────────────────────────────────────
 
     save(state) {
+      // Auto-prune expired & duplicate cookies before saving
+      const { kept: cleanState } = this.pruneExpired(state);
+      state = cleanState;
+
       const { valid, reason } = this._validate(state);
       if (!valid) {
         logger.warn("Session", `Refusing to save invalid state: ${reason}`);
