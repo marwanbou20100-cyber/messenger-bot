@@ -1,26 +1,33 @@
 "use strict";
+  const fmt = require("../utils/fmt");
 
-module.exports = {
-  name: "id",
-  aliases: ["uid", "tid"],
-  description: "Get the ID of the current thread and sender, or mentioned users.",
-  usage: "id [@mention]",
-  category: "Utility",
+  module.exports = {
+    name: "id",
+    aliases: ["myid", "uid", "معرف"],
+    description: "عرض معرف المستخدم أو المجموعة.",
+    usage: "id [@mention]",
+    category: "General",
 
-  async execute({ api, event }) {
-    const mentions = event.mentions || {};
-    const mentionIDs = Object.keys(mentions);
+    async execute({ api, event }) {
+      const { threadID, senderID, mentions } = event;
+      const mentioned = Object.keys(mentions || {})[0];
+      const targetID  = mentioned || senderID;
 
-    if (mentionIDs.length > 0) {
-      const lines = mentionIDs.map(id => `• ${mentions[id].replace(/@/, "")}: ${id}`);
-      return api.sendMessage(`🆔 Mentioned User IDs:\n${lines.join("\n")}`, event.threadID);
-    }
+      let name = targetID;
+      try {
+        const info = await api.getUserInfo([targetID]);
+        name = info[targetID]?.name || targetID;
+      } catch {}
 
-    api.sendMessage(
-      `🆔 IDs\n` +
-      `• Your ID  : ${event.senderID}\n` +
-      `• Thread ID: ${event.threadID}`,
-      event.threadID
-    );
-  },
-};
+      const msg = [
+        fmt.header(),
+        "",
+        fmt.row("المستخدم",   name,           "👤"),
+        fmt.row("المعرف",     targetID,       "🪪"),
+        fmt.row("المجموعة",   threadID,       "💬"),
+      ].join("\n");
+
+      api.sendMessage(msg, event.threadID);
+    },
+  };
+  
