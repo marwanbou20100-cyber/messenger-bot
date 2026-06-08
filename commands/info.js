@@ -1,42 +1,42 @@
 "use strict";
+  const os     = require("os");
+  const config = require("../config.json");
+  const fmt    = require("../utils/fmt");
 
-const os = require("os");
-const config = require("../config.json");
+  module.exports = {
+    name: "info",
+    aliases: ["about", "botinfo"],
+    description: "معلومات تفصيلية عن البوت والخادم.",
+    usage: "info",
+    category: "General",
 
-module.exports = {
-  name: "info",
-  aliases: ["about", "botinfo"],
-  description: "Show detailed information about the bot.",
-  usage: "info",
-  category: "General",
+    async execute({ api, event }) {
+      const upSec  = Math.floor(process.uptime());
+      const memMB  = Math.round(process.memoryUsage().rss / 1048576);
+      const botID  = api.getCurrentUserID();
 
-  async execute({ api, event }) {
-    const uptimeSeconds = Math.floor(process.uptime());
-    const h = Math.floor(uptimeSeconds / 3600);
-    const m = Math.floor((uptimeSeconds % 3600) / 60);
-    const s = uptimeSeconds % 60;
-    const uptime = `${h}h ${m}m ${s}s`;
+      let groups = 0;
+      try { const { groupsCache } = require("../state"); groups = groupsCache.size; } catch {}
 
-    const mem = process.memoryUsage();
-    const memMB = (mem.rss / 1024 / 1024).toFixed(1);
+      const msg = [
+        fmt.header(),
+        "",
+        fmt.row("الاسم",      config.bot.name,     "🤖"),
+        fmt.row("الإصدار",    "v" + config.bot.version, "🔖"),
+        fmt.row("البادئة",    config.prefix,        "⌨️"),
+        fmt.row("المعرف",     botID,                "🪪"),
+        fmt.row("المجموعات",  String(groups),       "👥"),
+        "",
+        fmt.divider(),
+        "",
+        fmt.row("النظام",     os.platform() + " " + os.arch(), "🖥️"),
+        fmt.row("Node.js",    process.version,      "🟩"),
+        fmt.row("التشغيل",    fmt.uptime(upSec),    "⏱"),
+        fmt.row("الذاكرة",    memMB + " MB",        "💾"),
+        fmt.row("المعالج",    os.cpus().length + " نوى", "⚡"),
+      ].join("\n");
 
-    const botID = api.getCurrentUserID();
-
-    const msg =
-      `╔══ 🤖 Bot Information ══╗\n` +
-      `║ Name     : ${config.bot.name}\n` +
-      `║ Version  : ${config.bot.version}\n` +
-      `║ Bot ID   : ${botID}\n` +
-      `║ Prefix   : ${config.prefix}\n` +
-      `╠══ 🖥️ Server Info ══╣\n` +
-      `║ Platform : ${os.platform()} (${os.arch()})\n` +
-      `║ Node.js  : ${process.version}\n` +
-      `║ Uptime   : ${uptime}\n` +
-      `║ Memory   : ${memMB} MB\n` +
-      `║ CPU      : ${os.cpus()[0].model.trim()}\n` +
-      `║ Cores    : ${os.cpus().length}\n` +
-      `╚════════════════════════╝`;
-
-    api.sendMessage(msg, event.threadID);
-  },
-};
+      api.sendMessage(msg, event.threadID);
+    },
+  };
+  
