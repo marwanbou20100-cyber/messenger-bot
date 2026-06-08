@@ -257,18 +257,15 @@ async function handleMessage(api, event, commands) {
     groupStats.set(threadID, cs);
   }
 
-  if (replyDelay.enabled && replyDelay.ms > 0) {
-    await new Promise(r => setTimeout(r, replyDelay.ms));
-  }
-
-  try {
+  // ── Human-like response timing ────────────────────────────────────────
+  // read pause → typing indicator → think pause → execute → stop typing
+  await humanDelay.withTyping(api, threadID, cmd.name, event.body || "", async () => {
     await cmd.execute({ api, event: { ...event, isGroup }, args, commands, mutedThreads, lockedThreads });
-  } catch (e) {
+  }).catch(async (e) => {
     logger.error("Command", "Error in " + config.prefix + cmd.name + ": " + e.message);
     diagnostics.recordError("Command", e, { cmd: cmd.name, threadID, senderID });
-    api.sendMessage(config.messages.errorOccurred, threadID).catch(() => {});
-  }
-}
+    await api.sendMessage(config.messages.errorOccurred, threadID).catch(() => {});
+  });
 
 // ── Event handler ─────────────────────────────────────────────────────────────
 async function handleEvent(api, event) {
