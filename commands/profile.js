@@ -1,56 +1,41 @@
 "use strict";
+  const fmt = require("../utils/fmt");
 
-module.exports = {
-  name: "profile",
-  aliases: ["userinfo", "whois"],
-  description: "Get information about a user by mention or ID.",
-  usage: "profile [@mention | userID]",
-  category: "Utility",
+  module.exports = {
+    name: "profile",
+    aliases: ["userinfo", "whois", "ملف"],
+    description: "عرض معلومات مستخدم بالإشارة أو المعرف.",
+    usage: "profile [@إشارة | معرف]",
+    category: "Utility",
 
-  async execute({ api, event, args }) {
-    const mentions  = event.mentions || {};
-    const mentionID = Object.keys(mentions)[0];
-    const targetID  = mentionID || args[0] || event.senderID;
+    async execute({ api, event, args }) {
+      const mentions  = event.mentions || {};
+      const mentionID = Object.keys(mentions)[0];
+      const targetID  = mentionID || args[0] || event.senderID;
 
-    if (args[0] && !/^\d+$/.test(args[0]) && !mentionID) {
-      return api.sendMessage("❌ Provide a valid user ID or mention someone.", event.threadID);
-    }
+      let data;
+      try { data = await api.getUserInfo([targetID]); }
+      catch (e) { return api.sendMessage(fmt.err("تعذّر جلب البيانات: " + e.message), event.threadID); }
 
-    try {
-      let info = null;
+      const u = data[targetID];
+      if (!u) return api.sendMessage(fmt.err("المستخدم غير موجود."), event.threadID);
 
-      // Try getUserInfoV2 first (richer data), fall back to getUserInfo
-      if (typeof api.getUserInfoV2 === "function") {
-        try { info = await api.getUserInfoV2(targetID); } catch {}
-      }
-      if (!info && typeof api.getUserInfo === "function") {
-        const bulk = await api.getUserInfo([targetID]);
-        info = bulk ? bulk[targetID] : null;
-      }
+      const name    = u.name      || "—";
+      const gender  = u.gender === "male" ? "ذكر 👦" : u.gender === "female" ? "أنثى 👧" : "—";
+      const type    = u.type      || "user";
+      const vanity  = u.vanity    ? "fb.com/" + u.vanity : "—";
 
-      if (!info) return api.sendMessage("❌ User not found.", event.threadID);
-
-      const name     = info.name || "Unknown";
-      const gender   = info.gender === 2 ? "Male" : info.gender === 1 ? "Female" : "N/A";
-      const friends  = info.friendCount   ?? "N/A";
-      const mutuals  = info.mutualFriends ?? "N/A";
-      const verified = info.isVerified    ? "✅ Yes" : "❌ No";
-      const isFriend = info.isFriend      ? "👥 Yes" : "No";
-
-      const msg =
-        "👤 User Profile\n" +
-        "─────────────\n" +
-        "• Name     : " + name    + "\n" +
-        "• ID       : " + targetID + "\n" +
-        "• Gender   : " + gender   + "\n" +
-        "• Friends  : " + friends  + "\n" +
-        "• Mutuals  : " + mutuals  + "\n" +
-        "• Verified : " + verified + "\n" +
-        "• Friend   : " + isFriend;
+      const msg = [
+        fmt.header(),
+        "",
+        fmt.row("الاسم",    name,     "👤"),
+        fmt.row("المعرف",   targetID, "🪪"),
+        fmt.row("الجنس",    gender,   "🧬"),
+        fmt.row("النوع",    type,     "🏷️"),
+        fmt.row("الرابط",   vanity,   "🔗"),
+      ].join("\n");
 
       api.sendMessage(msg, event.threadID);
-    } catch (e) {
-      api.sendMessage("❌ Error: " + e.message, event.threadID);
-    }
-  },
-};
+    },
+  };
+  
