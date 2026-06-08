@@ -266,6 +266,7 @@ async function handleMessage(api, event, commands) {
     diagnostics.recordError("Command", e, { cmd: cmd.name, threadID, senderID });
     await api.sendMessage(config.messages.errorOccurred, threadID).catch(() => {});
   });
+}
 
 // ── Event handler ─────────────────────────────────────────────────────────────
 async function handleEvent(api, event) {
