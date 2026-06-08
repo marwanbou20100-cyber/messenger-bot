@@ -38,6 +38,14 @@
 
     if (!Array.isArray(state) || state.length === 0) return;
 
+    // Auto-prune expired/duplicate cookies before comparing hash
+    try {
+      if (_session && typeof _session.pruneExpired === "function") {
+        const { kept, removed } = _session.pruneExpired(state);
+        if (removed > 0) state = kept; // use cleaned state for hash + save
+      }
+    } catch {}
+
     const hash    = _hashState(state);
     const now     = Date.now();
     const changed = hash && hash !== _lastHash;
