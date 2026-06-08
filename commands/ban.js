@@ -1,77 +1,69 @@
 "use strict";
-const config     = require("../config.json");
-const banManager = require("../utils/banManager");
+  const config     = require("../config.json");
+  const banManager = require("../utils/banManager");
+  const fmt        = require("../utils/fmt");
 
-module.exports = {
-  name: "ban",
-  aliases: ["botban", "unban", "bans"],
-  description: "حظر/رفع حظر مستخدم من استخدام البوت بالكامل.",
-  usage: [
-    "-ban @شخص [سبب]    — حظر مستخدم",
-    "-unban @شخص        — رفع الحظر",
-    "-ban check @شخص   — التحقق من حالة الحظر",
-    "-bans               — قائمة المحظورين",
-  ].join("\n"),
-  category: "Admin",
-  adminOnly: true,
+  module.exports = {
+    name: "ban",
+    aliases: ["botban", "unban", "bans"],
+    description: "حظر/رفع حظر مستخدم من استخدام البوت.",
+    usage: "ban @شخص [سبب]  |  unban @شخص  |  bans",
+    category: "Admin",
+    adminOnly: true,
 
-  async execute({ api, event, args }) {
-    const { threadID, senderID } = event;
-    const botAdmins = config.bot.adminIDs || [];
+    async execute({ api, event, args }) {
+      const { threadID, senderID, mentions } = event;
+      const sub = (args[0] || "").toLowerCase().replace(/^-+/, "");
 
-    // Normalize: "unban" / "bans" called via aliases
-    let sub = (args[0] || "").toLowerCase();
-    const cmdName = (event.body || "").trim().split(/\s+/)[0].toLowerCase().replace(/^-+/, "");
-    if (cmdName === "unban")      sub = "unban";
-    else if (cmdName === "bans")  sub = "list";
+      // عرض قائمة المحظورين
+      if (sub === "bans" || sub === "list") {
+        const list = banManager.getAll ? banManager.getAll() : [];
+        if (!list.length) return api.sendMessage(fmt.ok("لا يوجد مستخدمون محظورون."), threadID);
+        const lines = [fmt.header(), "", "🚫  قائمة الحظر", fmt.divider()];
+        list.forEach((b, i) => lines.push("  " + (i+1) + ".  " + (b.name || b.id) + (b.reason ? "  (" + b.reason + ")" : "")));
+        return api.sendMessage(lines.join("\n"), threadID);
+      }
 
-    const mentions   = event.mentions || {};
-    const mentionIDs = Object.keys(mentions);
-    const prefix     = config.prefix;
+      const targetID = Object.keys(mentions)[0] || args[0];
+      if (!targetID) {
+        return api.sendMessage(
+          fmt.header() + "\n\n" +
+          fmt.row("الاستخدام", config.prefix + "ban @شخص [سبب]", "📌") + "\n" +
+          fmt.row("رفع الحظر", config.prefix + "unban @شخص", "📌") + "\n" +
+          fmt.row("القائمة",   config.prefix + "bans", "📋"),
+          threadID
+        );
+      }
 
-    // ── list ──────────────────────────────────────────────────────────────────
-    if (sub === "list" || sub === "bans") {
-      const all = banManager.listBans();
-      if (!all.length) return api.sendMessage("✅ لا يوجد أي مستخدم محظور.", threadID);
-      const lines = all.slice(0, 20).map((b, i) =>
-        `${i + 1}. ${b.userID}\n   📝 ${b.reason}\n   🕐 ${new Date(b.bannedAt).toLocaleDateString("ar-SA")}`
-      );
-      return api.sendMessage(`🚫 المحظورون (${all.length}):\n━━━━━━━━━━━\n${lines.join("\n\n")}`, threadID);
-    }
+      // رفع الحظر
+      if (sub === "unban") {
+        const removed = banManager.remove ? banManager.remove(targetID) : false;
+        const name = Object.values(mentions)[0] || targetID;
+        return api.sendMessage(
+          removed ? fmt.ok("تم رفع حظر " + name + " ✅") : fmt.err("هذا المستخدم غير محظور."),
+          threadID
+        );
+      }
 
-    // ── check ────────────────────────────────────────────────────────────────
-    if (sub === "check") {
-      const uid = mentionIDs[0] || args[1];
-      if (!uid) return api.sendMessage(`❌ اذكر مستخدماً.`, threadID);
-      const b = banManager.getBan(uid);
-      if (!b) return api.sendMessage(`✅ المستخدم ${uid} غير محظور.`, threadID);
-      return api.sendMessage(
-        `🚫 المستخدم ${uid} محظور\n📝 السبب: ${b.reason}\n🕐 تاريخ الحظر: ${new Date(b.bannedAt).toLocaleDateString("ar-SA")}`,
+      // فرض الحظر
+      if (targetID === senderID) return api.sendMessage(fmt.err("لا يمكنك حظر نفسك."), threadID);
+      if (config.bot.adminIDs.includes(targetID)) return api.sendMessage(fmt.err("لا يمكن حظر المشرفين."), threadID);
+
+      const reason = args.slice(Object.keys(mentions).length ? 1 : 1).join(" ") || "بدون سبب";
+      const name   = Object.values(mentions)[0] || targetID;
+
+      if (banManager.add) banManager.add(targetID, name, reason);
+
+      api.sendMessage(
+        [
+          fmt.header(),
+          "",
+          fmt.row("المحظور", name,   "🚫"),
+          fmt.row("السبب",   reason, "📝"),
+          fmt.row("بواسطة",  senderID === config.bot.adminIDs[0] ? "المشرف" : senderID, "🛡️"),
+        ].join("\n"),
         threadID
       );
-    }
-
-    // ── unban ────────────────────────────────────────────────────────────────
-    if (sub === "unban") {
-      const uid = mentionIDs[0] || args[1];
-      if (!uid) return api.sendMessage(`❌ اذكر مستخدماً.\nمثال: ${prefix}unban @شخص`, threadID);
-      const removed = banManager.unban(uid);
-      return api.sendMessage(removed ? `✅ تم رفع حظر ${uid}.` : `ℹ️ ${uid} ليس محظوراً أصلاً.`, threadID);
-    }
-
-    // ── ban (default) ────────────────────────────────────────────────────────
-    const uid = mentionIDs[0] || args[0];
-    if (!uid || uid === sub) {
-      return api.sendMessage(`❌ اذكر مستخدماً.\nمثال: ${prefix}ban @شخص سبب الحظر`, threadID);
-    }
-    if (botAdmins.includes(String(uid))) {
-      return api.sendMessage("⛔ لا يمكن حظر مشرف البوت.", threadID);
-    }
-    const reason = args.slice(mentionIDs.length || 1).join(" ").trim() || "مخالفة متكررة";
-    banManager.ban(uid, { reason, bannedBy: senderID, threadID });
-    return api.sendMessage(
-      `🚫 تم حظر المستخدم ${uid}\n📝 السبب: ${reason}\n\nلرفع الحظر: ${prefix}unban @${uid}`,
-      threadID
-    );
-  },
-};
+    },
+  };
+  
