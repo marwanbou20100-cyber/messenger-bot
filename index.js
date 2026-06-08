@@ -27,6 +27,7 @@ const { setBotApi, setBotStatus, logActivity, logViolation, startApiServer, setC
 const pendingReplies = require("./utils/pendingReplies");
 const threadScanner  = require("./utils/threadScanner");
 const adminCache     = require("./utils/threadAdminCache");
+const humanDelay     = require("./utils/humanDelay");
 
 // ── Config constants ──────────────────────────────────────────────────────────
 const APP_STATE_PATH = path.resolve(__dirname, config.appStatePath);
