@@ -1,20 +1,25 @@
 "use strict";
-
-module.exports = {
-  name: "time",
-  aliases: ["date", "clock"],
-  description: "Show the current date and time.",
-  usage: "time",
-  category: "Utility",
-
-  async execute({ api, event }) {
-    const now = new Date();
-    const options = {
-      weekday: "long", year: "numeric", month: "long", day: "numeric",
-      hour: "2-digit", minute: "2-digit", second: "2-digit",
-      timeZoneName: "short",
-    };
-    const formatted = now.toLocaleString("en-US", options);
-    api.sendMessage(`🕒 Current Time\n${formatted}`, event.threadID);
-  },
-};
+  const fmt = require("../utils/fmt");
+  module.exports = {
+    name: "time",
+    aliases: ["date", "وقت"],
+    description: "عرض الوقت والتاريخ الحاليين.",
+    usage: "time [timezone]",
+    category: "Utility",
+    async execute({ api, event, args }) {
+      const tz  = args[0] || "Asia/Riyadh";
+      let   now, tzLabel;
+      try {
+        now     = new Date().toLocaleString("ar-SA", { timeZone: tz, dateStyle: "full", timeStyle: "medium" });
+        tzLabel = tz;
+      } catch {
+        now     = new Date().toLocaleString("ar-SA", { timeZone: "Asia/Riyadh", dateStyle: "full", timeStyle: "medium" });
+        tzLabel = "Asia/Riyadh (افتراضي)";
+      }
+      api.sendMessage(
+        [fmt.header(), "", fmt.row("التاريخ",     now,     "📅"), fmt.row("المنطقة", tzLabel, "🌍")].join("\n"),
+        event.threadID
+      );
+    },
+  };
+  
