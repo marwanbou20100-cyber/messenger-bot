@@ -25,6 +25,7 @@ const { login }          = require("@neoaz07/nkxfca");
 const { lockedThreads, totalLockedThreads, mutedThreads, groupsCache, autoReplies, groupStats, replyDelay } = require("./state");
 const { setBotApi, setBotStatus, logActivity, logViolation, startApiServer, setCookieRefresher } = require("./api");
 const pendingReplies = require("./utils/pendingReplies");
+const botAdmins      = require("./utils/botAdmins");
 const threadScanner  = require("./utils/threadScanner");
 const adminCache     = require("./utils/threadAdminCache");
 const humanDelay     = require("./utils/humanDelay");
@@ -84,7 +85,8 @@ function loadCommands() {
 
 // ── Permission helpers ────────────────────────────────────────────────────────
 function isBotAdmin(senderID) {
-  return config.bot.adminIDs.includes(senderID);
+  // Use dynamic botAdmins so -botadmin add/remove takes effect immediately
+  return botAdmins.isAdmin(String(senderID));
 }
 
 async function isThreadAdmin(api, senderID, threadID) {
@@ -284,6 +286,23 @@ async function handleEvent(api, event) {
     }
   }
 
+  // ── Auto-join: accept when bot itself is added to a group ────────────
+  if (logMessageType === "log:subscribe") {
+    const _botID  = String(api.getCurrentUserID());
+    const _added  = (logMessageData?.addedParticipants || [])
+      .map(p => String(p.userFbId || p.id || p.fbid || ""))
+      .filter(Boolean);
+    if (_added.includes(_botID)) {
+      try { await api.handleMessageRequest(threadID, true); } catch {}
+      logger.info("AutoJoin", "Bot added to group " + threadID + " — auto-accepted.");
+      api.sendMessage(
+        "👋 مرحباً! أنا " + config.bot.name + " v" + config.bot.version + " 🤖\n" +
+        "اكتب " + config.prefix + "help لعرض الأوامر المتاحة.",
+        threadID
+      ).catch(() => {});
+    }
+  }
+
   if (logMessageType === "log:subscribe" && config.features.greetNewMembers) {
     const added = logMessageData?.addedParticipants?.map(p => p.userFbId || p.id) || [];
     const botID = api.getCurrentUserID();
@@ -444,7 +463,7 @@ function startBot() {
         logger.warn("MQTT", "Listen error #" + _mqttErrorCount + ": " + (mqttErr.message || mqttErr));
         diagnostics.recordError("MQTT", mqttErr instanceof Error ? mqttErr : new Error(String(mqttErr)));
         if (_mqttErrorCount >= 3) {
-          logger.error("MQTT", "5 consecutive errors — forcing reconnect.");
+          logger.error("MQTT", "3 consecutive errors — forcing reconnect.");
           if (_mqttWatchdog) { clearInterval(_mqttWatchdog); _mqttWatchdog = null; }
           setBotStatus("offline — reconnecting...");
           cookieRefresher.stop();
