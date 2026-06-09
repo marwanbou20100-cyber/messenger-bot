@@ -119,7 +119,6 @@ let _lastEventAt    = Date.now();
 let _mqttErrorCount = 0;
 const MQTT_STALE_MS = 4 * 60 * 1000;
 let _mqttWatchdog   = null;
-let _stopListening  = null;
 
 function startMqttWatchdog(reconnectFn) {
   if (_mqttWatchdog) clearInterval(_mqttWatchdog);
@@ -436,11 +435,11 @@ function startBot() {
       cookieRefresher.stop();
       humanSimulator.stop();
       stopKeepalive();
-      if (_stopListening) { try { _stopListening(); } catch {} _stopListening = null; }
       setTimeout(startBot, 5000);
     });
 
-    _stopListening = api.listenMqtt(async (mqttErr, event) => {
+    api.listenMqtt(async (mqttErr, event) => {
+      if (mqttErr) {
         _mqttErrorCount++;
         logger.warn("MQTT", "Listen error #" + _mqttErrorCount + ": " + (mqttErr.message || mqttErr));
         diagnostics.recordError("MQTT", mqttErr instanceof Error ? mqttErr : new Error(String(mqttErr)));
@@ -450,7 +449,6 @@ function startBot() {
           setBotStatus("offline — reconnecting...");
           cookieRefresher.stop();
           humanSimulator.stop();
-          if (_stopListening) { try { _stopListening(); } catch {} _stopListening = null; }
           setTimeout(startBot, 10000);
         }
         return;
