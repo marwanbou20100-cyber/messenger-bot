@@ -85,7 +85,7 @@ function formatDate(ts) {
 
 module.exports = {
   name: "autoreply",
-  aliases: ["sch", "schedule", "auto", "timer"],
+  aliases: ["sch", "auto", "timer"],
   description: "جدولة رسائل تُرسَل تلقائياً كل فترة زمنية. (مشرف فقط)",
   usage: [
     "-autoreply add <مقدار> <وحدة> <الرسالة>",
