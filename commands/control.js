@@ -108,6 +108,8 @@ async function showRemoteMenu(api, replyTID, senderID, target) {
     "8. 🎛️ إرسال لوحة التحكم للمجموعة",
     hasAR && ar.enabled ? "9. 🤖 تعطيل الرد التلقائي"
                         : (hasAR ? "9. 🤖 تفعيل الرد التلقائي" : "9. 🤖 إعداد رد تلقائي"),
+    "10. 🔗 رابط دعوة المجموعة",
+    "11. ✏️  كنيات الأعضاء",
     "",
     "0. ↩️ رجوع للقائمة",
     "00. ❌ إلغاء",
@@ -280,7 +282,91 @@ async function showRemoteMenu(api, replyTID, senderID, target) {
           }
           break;
 
-        default:
+        // 10 — get invite link
+        case "10": {
+          try {
+            const info = await _api.getThreadInfo(target.threadID);
+            const link = info.inviteLink || info.invite_link || null;
+            if (link) {
+              _api.sendMessage("🔗 رابط دعوة «" + target.name + "»:\n" + link, rTID);
+            } else {
+              _api.sendMessage("⚠️ لا يوجد رابط دعوة، أو أن المجموعة أغلقت الدعوة.", rTID);
+            }
+          } catch (e) {
+            _api.sendMessage("❌ تعذّر جلب رابط الدعوة: " + e.message, rTID);
+          }
+          break;
+        }
+
+        // 11 — manage nicknames
+        case "11": {
+          try {
+            const info    = await _api.getThreadInfo(target.threadID);
+            const ids     = info.participantIDs || [];
+            if (ids.length === 0) { _api.sendMessage("❌ لا يوجد أعضاء.", rTID); break; }
+            const uInfos  = await _api.getUserInfo(ids).catch(() => ({}));
+            const members = ids.map((id, i) => ({ id, name: (uInfos[id] && uInfos[id].name) || id, index: i + 1 }));
+
+            const lines = members.map(m => m.index + ". " + m.name).join("\n");
+            await _api.sendMessage(
+              "✏️ كنيات الأعضاء — «" + target.name + "»\n" +
+              "━━━━━━━━━━━━━━━━━━━━━━\n" +
+              lines + "\n\n" +
+              "اكتب رقم العضو لتغيير كنيته، أو 0 للإلغاء:",
+              rTID
+            );
+
+            pendingReplies.set(rSID, {
+              handler: async (inp, a2, ev2) => {
+                const t2TID = ev2.threadID;
+                const t2SID = ev2.senderID;
+                if (inp.trim() === "0") return a2.sendMessage("❌ تم الإلغاء.", t2TID);
+
+                const selIdx = parseInt(inp.trim()) - 1;
+                if (isNaN(selIdx) || selIdx < 0 || selIdx >= members.length) {
+                  await a2.sendMessage("❌ رقم غير صحيح. اختر من 1 إلى " + members.length + " أو 0 للإلغاء.", t2TID);
+                  return pendingReplies.KEEP;
+                }
+
+                const selected = members[selIdx];
+                await a2.sendMessage(
+                  "✏️ اكتب الكنية الجديدة لـ «" + selected.name + "»\n(أرسل - لحذف الكنية):",
+                  t2TID
+                );
+                pendingReplies.set(t2SID, {
+                  handler: async (nickname, a3, ev3) => {
+                    const finalNick = nickname.trim() === "-" ? "" : nickname.trim();
+                    if (!finalNick && nickname.trim() !== "-") {
+                      return a3.sendMessage("❌ كنية فارغة. أرسل - لحذف الكنية.", ev3.threadID);
+                    }
+                    try {
+                      await a3.changeNickname(finalNick, target.threadID, selected.id);
+                      const msg = finalNick
+                        ? "✅ تم تغيير كنية «" + selected.name + "» إلى «" + finalNick + "»."
+                        : "✅ تم حذف كنية «" + selected.name + "».";
+                      a3.sendMessage(msg, ev3.threadID);
+                      a3.sendMessage(
+                        finalNick
+                          ? "✏️ تم تغيير كنيتك إلى «" + finalNick + "» عن بُعد."
+                          : "✏️ تم حذف كنيتك عن بُعد.",
+                        target.threadID
+                      ).catch(() => {});
+                    } catch (e) {
+                      a3.sendMessage("❌ فشل تغيير الكنية: " + e.message, ev3.threadID);
+                    }
+                  },
+                });
+                return pendingReplies.KEEP;
+              },
+            });
+            return pendingReplies.KEEP;
+          } catch (e) {
+            _api.sendMessage("❌ تعذّر جلب الأعضاء: " + e.message, rTID);
+          }
+          break;
+        }
+
+                default:
           _api.sendMessage("❌ خيار غير صحيح. اختر رقماً من القائمة.", rTID);
       }
 
