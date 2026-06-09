@@ -440,7 +440,6 @@ function startBot() {
       setTimeout(startBot, 5000);
     });
 
-    api.listenMqtt(async (mqttErr, event) => {
     _stopListening = api.listenMqtt(async (mqttErr, event) => {
         _mqttErrorCount++;
         logger.warn("MQTT", "Listen error #" + _mqttErrorCount + ": " + (mqttErr.message || mqttErr));
