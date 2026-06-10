@@ -1,10 +1,10 @@
 "use strict";
 
-const yts          = require("yt-search");
-const playdl       = require("play-dl");
-const fs           = require("fs");
-const path         = require("path");
-const os           = require("os");
+const yts  = require("yt-search");
+const https = require("https");
+const fs    = require("fs");
+const path  = require("path");
+const os    = require("os");
 const pendingReplies = require("../utils/pendingReplies");
 
 function formatDuration(sec) {
@@ -14,20 +14,65 @@ function formatDuration(sec) {
   return m + ":" + String(s).padStart(2, "0");
 }
 
-async function downloadAudio(videoId, outPath) {
-  const url    = "https://www.youtube.com/watch?v=" + videoId;
-  const source = await playdl.stream(url, { quality: 0 });
+// يحصل على رابط التحميل المباشر عبر cobalt.tools (مجاني، بلا مكتبات)
+function getCobaltUrl(videoId) {
   return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(outPath);
-    source.stream.pipe(file);
-    file.on("finish", resolve);
-    source.stream.on("error", reject);
-    file.on("error", reject);
-    const t = setTimeout(() => {
-      source.stream.destroy();
-      reject(new Error("تجاوز وقت التحميل (60 ث)"));
-    }, 60000);
-    file.on("finish", () => clearTimeout(t));
+    const body = JSON.stringify({
+      url: "https://www.youtube.com/watch?v=" + videoId,
+      downloadMode: "audio",
+      audioFormat: "mp3",
+      audioQuality: "128"
+    });
+    const req = https.request({
+      hostname: "api.cobalt.tools",
+      path: "/",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Content-Length": Buffer.byteLength(body),
+      }
+    }, res => {
+      let d = "";
+      res.on("data", c => d += c);
+      res.on("end", () => {
+        try {
+          const r = JSON.parse(d);
+          if (r.url) return resolve(r.url);
+          if (r.status === "stream" || r.status === "redirect") return resolve(r.url);
+          reject(new Error(
+            (r.error && (r.error.code || r.error)) ||
+            "cobalt: لم يُعثر على رابط تحميل"
+          ));
+        } catch (e) { reject(e); }
+      });
+    });
+    req.setTimeout(15000, () => { req.destroy(); reject(new Error("cobalt: انتهى وقت الاتصال")); });
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+// تحميل ملف من URL مع دعم التوجيه التلقائي
+function downloadFile(url, outPath, redirects) {
+  redirects = redirects || 0;
+  return new Promise((resolve, reject) => {
+    if (redirects > 5) return reject(new Error("عدد كبير من إعادة التوجيه"));
+    https.get(url, { headers: { "User-Agent": "Mozilla/5.0" } }, res => {
+      if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+        return downloadFile(res.headers.location, outPath, redirects + 1).then(resolve).catch(reject);
+      }
+      if (res.statusCode !== 200) {
+        return reject(new Error("HTTP " + res.statusCode));
+      }
+      const file = fs.createWriteStream(outPath);
+      res.pipe(file);
+      file.on("finish", resolve);
+      file.on("error", reject);
+      const t = setTimeout(() => { res.destroy(); reject(new Error("انتهى وقت التحميل")); }, 90000);
+      file.on("finish", () => clearTimeout(t));
+    }).on("error", reject);
   });
 }
 
@@ -86,18 +131,28 @@ module.exports = {
           }
 
           const v = videos[idx];
-          await _api.sendMessage("⏳ جاري تحميل «" + v.title + "»...\nقد يستغرق بضع ثوانٍ.", rTID);
+          await _api.sendMessage("⏳ جاري تجهيز «" + v.title + "»...", rTID);
 
-          const tmpFile = path.join(os.tmpdir(), "music_" + Date.now() + ".webm");
+          const tmpFile = path.join(os.tmpdir(), "music_" + Date.now() + ".mp3");
           try {
-            await downloadAudio(v.videoId, tmpFile);
+            // 1. احصل على رابط التحميل من cobalt.tools
+            const dlUrl = await getCobaltUrl(v.videoId);
 
+            // 2. حمّل الملف
+            await downloadFile(dlUrl, tmpFile);
+
+            // 3. تحقق من الحجم
             const sizeMB = fs.statSync(tmpFile).size / (1024 * 1024);
+            if (sizeMB < 0.01)
+              return _api.sendMessage("❌ الملف فارغ، جرّب أغنية أخرى.", rTID);
             if (sizeMB > 25)
-              return _api.sendMessage("❌ حجم الملف كبير جداً (" + sizeMB.toFixed(1) + " MB).", rTID);
+              return _api.sendMessage("❌ حجم الملف كبير جداً (" + sizeMB.toFixed(1) + " MB). جرّب أغنية أقصر.", rTID);
 
+            // 4. أرسل كرسالة صوتية
             await _api.sendMessage({
-              body: "🎵 " + v.title + "\n👤 " + ((v.author && v.author.name) || "؟") + "  ⏱️ " + formatDuration(v.seconds),
+              body: "🎵 " + v.title +
+                    "\n👤 " + ((v.author && v.author.name) || "؟") +
+                    "  ⏱️ " + formatDuration(v.seconds),
               attachment: fs.createReadStream(tmpFile),
             }, rTID);
 
