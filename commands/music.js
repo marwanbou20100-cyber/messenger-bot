@@ -1,7 +1,7 @@
 "use strict";
 
 const yts          = require("yt-search");
-const ytdl         = require("@distube/ytdl-core");
+const playdl       = require("play-dl");
 const fs           = require("fs");
 const path         = require("path");
 const os           = require("os");
@@ -14,18 +14,19 @@ function formatDuration(sec) {
   return m + ":" + String(s).padStart(2, "0");
 }
 
-// تحميل الصوت فقط من يوتيوب إلى ملف مؤقت
-function downloadAudio(videoId, outPath) {
+async function downloadAudio(videoId, outPath) {
+  const url    = "https://www.youtube.com/watch?v=" + videoId;
+  const source = await playdl.stream(url, { quality: 0 });
   return new Promise((resolve, reject) => {
-    const url    = "https://www.youtube.com/watch?v=" + videoId;
-    const stream = ytdl(url, { filter: "audioonly", quality: "lowestaudio" });
-    const file   = fs.createWriteStream(outPath);
-    stream.pipe(file);
+    const file = fs.createWriteStream(outPath);
+    source.stream.pipe(file);
     file.on("finish", resolve);
-    stream.on("error", reject);
+    source.stream.on("error", reject);
     file.on("error", reject);
-    // timeout: 60 seconds
-    const t = setTimeout(() => { stream.destroy(); reject(new Error("تجاوز وقت التحميل")); }, 60000);
+    const t = setTimeout(() => {
+      source.stream.destroy();
+      reject(new Error("تجاوز وقت التحميل (60 ث)"));
+    }, 60000);
     file.on("finish", () => clearTimeout(t));
   });
 }
@@ -33,7 +34,7 @@ function downloadAudio(videoId, outPath) {
 module.exports = {
   name: "music",
   aliases: ["song", "اغنية", "موسيقى", "اغاني"],
-  description: "البحث عن أغنية وإرسالها كرسالة صوتية مباشرة.",
+  description: "البحث عن أغنية وإرسالها كرسالة صوتية.",
   usage: "music <اسم الأغنية أو الفنان>",
   category: "Group",
 
@@ -56,15 +57,10 @@ module.exports = {
         .filter(v => v.videoId && v.seconds > 0 && v.seconds < 600)
         .slice(0, 5);
 
-      if (!videos.length) {
+      if (!videos.length)
         return api.sendMessage("❌ لم يُعثر على نتائج لـ «" + query + "».", threadID);
-      }
 
-      // عرض قائمة النتائج للاختيار
-      const lines = [
-        "🎵 نتائج YouTube Music",
-        "━━━━━━━━━━━━━━━━━━━━━━",
-      ];
+      const lines = ["🎵 نتائج YouTube Music", "━━━━━━━━━━━━━━━━━━━━━━"];
       videos.forEach((v, i) => {
         lines.push(
           (i + 1) + ". 🎧 " + v.title +
@@ -73,7 +69,6 @@ module.exports = {
         );
       });
       lines.push("\nأرسل رقم الأغنية للتحميل، أو 0 للإلغاء.");
-
       await api.sendMessage(lines.join("\n"), threadID);
 
       pendingReplies.set(senderID, {
@@ -91,20 +86,15 @@ module.exports = {
           }
 
           const v = videos[idx];
-          await _api.sendMessage(
-            "⏳ جاري تحميل «" + v.title + "»...\nقد يستغرق بضع ثوانٍ.",
-            rTID
-          );
+          await _api.sendMessage("⏳ جاري تحميل «" + v.title + "»...\nقد يستغرق بضع ثوانٍ.", rTID);
 
-          const tmpFile = path.join(os.tmpdir(), "music_" + Date.now() + "_" + v.videoId + ".webm");
+          const tmpFile = path.join(os.tmpdir(), "music_" + Date.now() + ".webm");
           try {
             await downloadAudio(v.videoId, tmpFile);
 
-            const stat = fs.statSync(tmpFile);
-            if (stat.size > 25 * 1024 * 1024) {
-              fs.unlinkSync(tmpFile);
-              return _api.sendMessage("❌ الملف كبير جداً (أكثر من 25 ميغابايت). جرّب أغنية أقصر.", rTID);
-            }
+            const sizeMB = fs.statSync(tmpFile).size / (1024 * 1024);
+            if (sizeMB > 25)
+              return _api.sendMessage("❌ حجم الملف كبير جداً (" + sizeMB.toFixed(1) + " MB).", rTID);
 
             await _api.sendMessage({
               body: "🎵 " + v.title + "\n👤 " + ((v.author && v.author.name) || "؟") + "  ⏱️ " + formatDuration(v.seconds),
