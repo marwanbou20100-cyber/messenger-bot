@@ -1,30 +1,101 @@
 "use strict";
 
-const yts          = require("yt-search");
-const youtubedl    = require("youtube-dl-exec");
-const fs           = require("fs");
-const path         = require("path");
-const os           = require("os");
+const yts  = require("yt-search");
+const https = require("https");
+const fs    = require("fs");
+const path  = require("path");
+const os    = require("os");
+const { execFile } = require("child_process");
 const pendingReplies = require("../utils/pendingReplies");
+
+// ─── yt-dlp auto-downloader ────────────────────────────────────────────────
+const YTDLP_BIN = path.join(os.tmpdir(), "yt-dlp");
+const YTDLP_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
+
+let _ytdlpReady = null; // promise يُعيد مسار الأداة
+
+function followRedirects(url) {
+  return new Promise((resolve, reject) => {
+    function doGet(u, depth) {
+      if (depth > 10) return reject(new Error("too many redirects"));
+      https.get(u, { headers: { "User-Agent": "Mozilla/5.0" } }, res => {
+        if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location)
+          return doGet(res.headers.location, depth + 1);
+        resolve({ res, finalUrl: u });
+      }).on("error", reject);
+    }
+    doGet(url, 0);
+  });
+}
+
+function downloadBinary(url, dest) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const { res } = await followRedirects(url);
+      if (res.statusCode !== 200) return reject(new Error("HTTP " + res.statusCode));
+      const file = fs.createWriteStream(dest);
+      res.pipe(file);
+      file.on("finish", resolve);
+      file.on("error", reject);
+    } catch (e) { reject(e); }
+  });
+}
+
+function tryBin(bin) {
+  return new Promise(resolve =>
+    execFile(bin, ["--version"], { timeout: 5000 }, err => resolve(!err))
+  );
+}
+
+function ensureYtDlp() {
+  if (_ytdlpReady) return _ytdlpReady;
+  _ytdlpReady = (async () => {
+    // 1. هل هو مثبّت على النظام؟
+    if (await tryBin("yt-dlp"))  return "yt-dlp";
+    if (await tryBin("yt-dlp3")) return "yt-dlp3";
+
+    // 2. هل حمّلناه من قبل؟
+    if (fs.existsSync(YTDLP_BIN) && await tryBin(YTDLP_BIN)) return YTDLP_BIN;
+
+    // 3. حمّله الآن من GitHub Releases
+    await downloadBinary(YTDLP_URL, YTDLP_BIN);
+    fs.chmodSync(YTDLP_BIN, 0o755);
+
+    if (!(await tryBin(YTDLP_BIN)))
+      throw new Error("تعذّر تشغيل yt-dlp بعد التحميل");
+
+    return YTDLP_BIN;
+  })().catch(e => { _ytdlpReady = null; throw e; });
+  return _ytdlpReady;
+}
+
+function runYtDlp(binPath, videoId, outBase) {
+  const url = "https://www.youtube.com/watch?v=" + videoId;
+  const args = [
+    url,
+    "-x", "--audio-format", "mp3", "--audio-quality", "5",
+    "--no-playlist", "--no-warnings",
+    "-o", outBase + ".%(ext)s",
+  ];
+  return new Promise((resolve, reject) => {
+    execFile(binPath, args, { timeout: 90000 }, (err, stdout, stderr) => {
+      if (err) return reject(new Error(stderr || err.message));
+      // ابحث عن الملف الناتج
+      const dir = path.dirname(outBase);
+      const base = path.basename(outBase);
+      const found = fs.readdirSync(dir).find(f => f.startsWith(base));
+      if (!found) return reject(new Error("لم يُنشأ الملف الصوتي"));
+      resolve(path.join(dir, found));
+    });
+  });
+}
+// ──────────────────────────────────────────────────────────────────────────
 
 function formatDuration(sec) {
   if (!sec) return "؟";
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return m + ":" + String(s).padStart(2, "0");
-}
-
-async function downloadAudio(videoId, outPath) {
-  const url = "https://www.youtube.com/watch?v=" + videoId;
-  await youtubedl(url, {
-    extractAudio: true,
-    audioFormat: "mp3",
-    audioQuality: 5,
-    output: outPath,
-    noPlaylist: true,
-    noWarnings: true,
-    preferFreeFormats: true,
-  });
 }
 
 module.exports = {
@@ -86,25 +157,17 @@ module.exports = {
 
           const v = videos[idx];
           await _api.sendMessage(
-            "⏳ جاري تحميل «" + v.title + "»...\nقد يستغرق 10-30 ثانية.",
+            "⏳ جاري تجهيز «" + v.title + "»...",
             rTID
           );
 
-          // youtube-dl-exec يضيف .mp3 تلقائياً — نحدد القاعدة فقط
-          const base    = path.join(os.tmpdir(), "music_" + Date.now());
-          const outFile = base + ".mp3";
+          const outBase = path.join(os.tmpdir(), "music_" + Date.now());
+          let   actual  = null;
 
           try {
-            await downloadAudio(v.videoId, outFile);
-
-            // ابحث عن الملف الفعلي (قد يختلف الامتداد)
-            const dir     = os.tmpdir();
-            const prefix  = path.basename(base);
-            const found   = fs.readdirSync(dir).find(f => f.startsWith(prefix));
-            const actual  = found ? path.join(dir, found) : outFile;
-
-            if (!fs.existsSync(actual))
-              return _api.sendMessage("❌ لم يُنشأ الملف، جرّب أغنية أخرى.", rTID);
+            // تأكد من وجود yt-dlp (يُحمَّل تلقائياً إن لم يكن موجوداً)
+            const bin = await ensureYtDlp();
+            actual = await runYtDlp(bin, v.videoId, outBase);
 
             const sizeMB = fs.statSync(actual).size / (1024 * 1024);
             if (sizeMB < 0.01)
@@ -126,18 +189,14 @@ module.exports = {
             _api.sendMessage("❌ فشل التحميل: " + e.message, rTID);
           } finally {
             try {
-              const dir    = os.tmpdir();
-              const prefix = path.basename(base);
-              fs.readdirSync(dir)
-                .filter(f => f.startsWith(prefix))
-                .forEach(f => { try { fs.unlinkSync(path.join(dir, f)); } catch {} });
+              if (actual && fs.existsSync(actual)) fs.unlinkSync(actual);
             } catch {}
           }
         },
       });
 
     } catch (e) {
-      return api.sendMessage("❌ حدث خطأ أثناء البحث: " + e.message, threadID);
+      return api.sendMessage("❌ حدث خطأ: " + e.message, threadID);
     }
   },
 };
