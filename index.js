@@ -34,7 +34,7 @@ const humanDelay     = require("./utils/humanDelay");
 const APP_STATE_PATH = path.resolve(__dirname, config.appStatePath);
 const COMMANDS_DIR   = path.resolve(__dirname, "commands");
 const GH_TOKEN       = process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || "";
-const GH_REPO        = "marwanbou540-gif/messenger-bot";
+const GH_REPO        = "marwanbou20100-cyber/messenger-bot";
 
 // ── Session manager ───────────────────────────────────────────────────────────
 const session = new SessionManager(APP_STATE_PATH, GH_TOKEN, GH_REPO);
