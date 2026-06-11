@@ -1,4 +1,6 @@
-"domain": "facebook.com",
+[
+  {
+    "domain": "facebook.com",
     "path": "/",
     "hostOnly": false,
     "creation": "2026-06-11T16:41:37.643Z",
