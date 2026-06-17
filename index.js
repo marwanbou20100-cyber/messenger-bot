@@ -122,6 +122,9 @@ let _mqttErrorCount = 0;
 const MQTT_STALE_MS = 4 * 60 * 1000;
 let _mqttWatchdog   = null;
 
+// ── Soft-restart handle (set inside startBot login callback) ─────────────────
+let _restartBot = null;
+
 function startMqttWatchdog(reconnectFn) {
   if (_mqttWatchdog) clearInterval(_mqttWatchdog);
   _mqttErrorCount = 0;
@@ -263,7 +266,7 @@ async function handleMessage(api, event, commands) {
   // ── Human-like response timing ────────────────────────────────────────
   // read pause → typing indicator → think pause → execute → stop typing
   await humanDelay.withTyping(api, threadID, cmd.name, event.body || "", async () => {
-    await cmd.execute({ api, event: { ...event, isGroup }, args, commands, mutedThreads, lockedThreads, restartBot });
+    await cmd.execute({ api, event: { ...event, isGroup }, args, commands, mutedThreads, lockedThreads, restartBot: _restartBot });
   }).catch(async (e) => {
     logger.error("Command", "Error in " + config.prefix + cmd.name + ": " + e.message);
     diagnostics.recordError("Command", e, { cmd: cmd.name, threadID, senderID });
@@ -451,7 +454,7 @@ function startBot() {
     _lastEventAt = Date.now();
 
     // ── Internal soft-restart (no process.exit) ───────────────────────────
-    function restartBot(reason) {
+    _restartBot = function restartBot(reason) {
       logger.info("Bot", "Soft restart requested" + (reason ? ": " + reason : "") + " — restarting in 3s...");
       setBotStatus("offline — restarting...");
       try { if (typeof cookieRefresher.emergencyFlush === "function") cookieRefresher.emergencyFlush().catch(() => {}); } catch {}
@@ -460,7 +463,7 @@ function startBot() {
       stopKeepalive();
       if (_mqttWatchdog) { clearInterval(_mqttWatchdog); _mqttWatchdog = null; }
       setTimeout(startBot, 3000);
-    }
+    };
 
     startMqttWatchdog(() => {
       logger.info("Bot", "MQTT watchdog triggered reconnect.");
