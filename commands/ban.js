@@ -17,10 +17,10 @@
 
       // عرض قائمة المحظورين
       if (sub === "bans" || sub === "list") {
-        const list = banManager.getAll ? banManager.getAll() : [];
+        const list = banManager.listBans();
         if (!list.length) return api.sendMessage(fmt.ok("لا يوجد مستخدمون محظورون."), threadID);
         const lines = [fmt.header(), "", "🚫  قائمة الحظر", fmt.divider()];
-        list.forEach((b, i) => lines.push("  " + (i+1) + ".  " + (b.name || b.id) + (b.reason ? "  (" + b.reason + ")" : "")));
+        list.forEach((b, i) => lines.push("  " + (i+1) + ".  " + (b.userID) + (b.reason ? "  (" + b.reason + ")" : "")));
         return api.sendMessage(lines.join("\n"), threadID);
       }
 
@@ -37,7 +37,7 @@
 
       // رفع الحظر
       if (sub === "unban") {
-        const removed = banManager.remove ? banManager.remove(targetID) : false;
+        const removed = banManager.unban(targetID);
         const name = Object.values(mentions)[0] || targetID;
         return api.sendMessage(
           removed ? fmt.ok("تم رفع حظر " + name + " ✅") : fmt.err("هذا المستخدم غير محظور."),
@@ -47,12 +47,12 @@
 
       // فرض الحظر
       if (targetID === senderID) return api.sendMessage(fmt.err("لا يمكنك حظر نفسك."), threadID);
-      if (config.bot.adminIDs.includes(targetID)) return api.sendMessage(fmt.err("لا يمكن حظر المشرفين."), threadID);
+      if ((config.bot.adminIDs || []).includes(String(targetID))) return api.sendMessage(fmt.err("لا يمكن حظر المشرفين."), threadID);
 
       const reason = args.slice(Object.keys(mentions).length ? 1 : 1).join(" ") || "بدون سبب";
       const name   = Object.values(mentions)[0] || targetID;
 
-      if (banManager.add) banManager.add(targetID, name, reason);
+      banManager.ban(targetID, { reason, bannedBy: senderID, threadID });
 
       api.sendMessage(
         [
@@ -60,10 +60,9 @@
           "",
           fmt.row("المحظور", name,   "🚫"),
           fmt.row("السبب",   reason, "📝"),
-          fmt.row("بواسطة",  senderID === config.bot.adminIDs[0] ? "المشرف" : senderID, "🛡️"),
+          fmt.row("بواسطة",  String(senderID) === String((config.bot.adminIDs || [])[0]) ? "المشرف الرئيسي" : senderID, "🛡️"),
         ].join("\n"),
         threadID
       );
     },
   };
-  
