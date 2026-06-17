@@ -238,12 +238,8 @@ async function handleMessage(api, event, commands) {
     return api.sendMessage("❌ هذا الأمر للمجموعات فقط.", threadID).catch(() => {});
   }
 
-  if (cmd.adminOnly) {
-    const botAdm    = isBotAdmin(senderID);
-    const threadAdm = cachedIsThreadAdmin !== null ? cachedIsThreadAdmin : await isThreadAdmin(api, senderID, threadID);
-    if (!botAdm && !threadAdm) {
-      return api.sendMessage("🔒 هذا الأمر يتطلب صلاحية مشرف.", threadID).catch(() => {});
-    }
+  if (cmd.adminOnly && !isBotAdmin(senderID)) {
+    return api.sendMessage("🔒 هذا الأمر خاص بمشرف البوت فقط.", threadID).catch(() => {});
   }
 
   if (config.features.antiSpam && antiSpam.isOnCooldown(senderID, cmd.name)) {
