@@ -1,7 +1,11 @@
 "use strict";
 
+const fs     = require("fs");
+const path   = require("path");
 const config = require("../config.json");
 const fmt    = require("../utils/fmt");
+
+const GIF_PATH = path.resolve(__dirname, "../assets/help-banner.gif");
 
 const COMMANDS = [
   { cmd: "help",           desc: "عرض هذه القائمة" },
@@ -14,6 +18,8 @@ const COMMANDS = [
   { cmd: "autoreply",      desc: "الردود التلقائية" },
   { cmd: "simstatus",      desc: "حالة محاكي الإنسان" },
   { cmd: "cookiestatus",   desc: "حالة تحديث الكوكيز" },
+  { cmd: "addadmin",       desc: "رفع عضو لمشرف بوت (رد على رسالته)" },
+  { cmd: "restart",        desc: "إعادة تشغيل البوت" },
 ];
 
 module.exports = {
@@ -24,8 +30,10 @@ module.exports = {
   category: "General",
 
   async execute({ api, event }) {
-    const p     = config.prefix;
-    const name  = (config.bot && config.bot.name) || "Phoenix";
+    const { threadID } = event;
+    const p    = config.prefix;
+    const name = (config.bot && config.bot.name) || "Phoenix";
+
     const lines = [
       fmt.header(),
       "",
@@ -43,6 +51,18 @@ module.exports = {
       fmt.inf("جميع الأوامر تبدأ بـ  " + p),
     );
 
-    api.sendMessage(lines.join("\n"), event.threadID);
+    // إرسال الـ GIF أولاً إن كان موجوداً
+    if (fs.existsSync(GIF_PATH)) {
+      try {
+        await api.sendMessage(
+          { body: lines.join("\n"), attachment: fs.createReadStream(GIF_PATH) },
+          threadID
+        );
+        return;
+      } catch {}
+    }
+
+    // fallback: نص فقط بدون GIF
+    api.sendMessage(lines.join("\n"), threadID);
   },
 };
