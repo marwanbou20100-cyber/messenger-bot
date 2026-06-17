@@ -287,7 +287,7 @@
     // MADOX label
     ctx.fillStyle = "#b8c8e0";
     ctx.font = f(16); ctx.textAlign = "left";
-    ctx.fillText("MADOX", 44, 40);
+    ctx.fillText((info.botName || "PHOENIX").toUpperCase(), 44, 40);
 
     // ── ONLINE hexagon badge ─────────────────────────────────────────────────
     const hexRx = 60, hexRy = 26;
@@ -484,7 +484,7 @@
       const admins   = Array.isArray(config.bot.adminIDs) ? config.bot.adminIDs.length : 0;
 
       const info = {
-        botName:  config.bot.name  || "MADOX",
+        botName:  config.bot.name  || "PHOENIX",
         version:  config.bot.version || "2.1.0",
         prefix:   config.prefix    || "-",
         days, hours, mins, secs,
