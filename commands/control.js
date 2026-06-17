@@ -6,9 +6,9 @@ const {
 const { lockedNames }    = require("../utils/lockedNames");
 const pendingReplies     = require("../utils/pendingReplies");
 const threadScanner      = require("../utils/threadScanner");
-const config             = require("../config.json");
+const botAdmins          = require("../utils/botAdmins");
 
-function isAdmin(id) { return (config.bot.adminIDs || []).includes(String(id)); }
+function isAdmin(id) { return botAdmins.isAdmin(String(id)); }
 
 function muteStatus(threadID) {
   const ex = mutedThreads.get(threadID);
