@@ -1,5 +1,7 @@
 "use strict";
 
+  const config = require("../config.json");
+
   module.exports = {
     name: "ai",
     aliases: ["chat", "gpt"],
@@ -13,16 +15,21 @@
 
       if (!args.length) {
         return api.sendMessage(
-          "❓ اكتب سؤالك بعد الأمر.\nمثال: -ai ما هو الذكاء الاصطناعي؟",
+          "❓ اكتب سؤالك بعد الأمر.\nمثال: " + config.prefix + "ai ما هو الذكاء الاصطناعي؟",
           threadID
         );
       }
 
-      const prompt = args.join(" ");
+      const prompt  = args.join(" ");
+      const botName = (config.bot && config.bot.name) || "Phoenix";
+
       await api.sendMessage("⏳ جاري التفكير...", threadID).catch(() => {});
 
       try {
-        const system = "أنت مساعد ذكي اسمك Madox. أجب باللغة التي يكتب بها المستخدم. كن مختصراً ومفيداً.";
+        const system =
+          "أنت مساعد ذكي اسمك " + botName + ". " +
+          "أجب باللغة التي يكتب بها المستخدم. كن مختصراً ومفيداً.";
+
         const url =
           "https://text.pollinations.ai/" +
           encodeURIComponent(prompt) +
@@ -30,7 +37,7 @@
           encodeURIComponent(system);
 
         const res = await fetch(url, {
-          headers: { "User-Agent": "Madox-Bot/2.1" },
+          headers: { "User-Agent": botName + "-Bot/2.1" },
           signal: AbortSignal.timeout(30000),
         });
 
@@ -45,4 +52,3 @@
       }
     },
   };
-  
