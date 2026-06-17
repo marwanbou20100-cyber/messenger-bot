@@ -428,6 +428,15 @@ function startBot() {
     nicknameLocks.setApi(api);
     startKeepalive(api);
 
+    // Restore scheduled auto-reply timers saved from previous session
+    for (const cmd of new Set(commands.values())) {
+      if (typeof cmd._restoreSchedules === "function") {
+        try { cmd._restoreSchedules(api); } catch (e) {
+          logger.warn("Bot", "Failed to restore schedules for " + cmd.name + ": " + e.message);
+        }
+      }
+    }
+
     if (config.humanSimulator && config.humanSimulator.enabled) {
       humanSimulator.start(api, config.humanSimulator);
       logger.info("HumanSim", "Human simulator started.");
