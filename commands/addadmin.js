@@ -18,10 +18,20 @@ module.exports = {
 
   async execute({ api, event, args }) {
     const { threadID, senderID, messageReply } = event;
+
+    // اكتشاف الأمر المُستدعى فعلياً (للتمييز بين الأسماء المستعارة)
+    const invokedAs = (event.body || "")
+      .slice(config.prefix.length).trim()
+      .split(/\s+/)[0].toLowerCase();
+
     const sub = (args[0] || "").toLowerCase();
 
     // ── قائمة المشرفين ─────────────────────────────────────────────────────
-    if (sub === "admins" || sub === "list" || sub === "مشرفين") {
+    const wantsList =
+      invokedAs === "admins" || invokedAs === "مشرفين" ||
+      sub === "admins" || sub === "list" || sub === "مشرفين";
+
+    if (wantsList) {
       const list = botAdmins.list();
       if (!list.length) {
         return api.sendMessage(
@@ -38,13 +48,16 @@ module.exports = {
     }
 
     // ── إزالة مشرف ─────────────────────────────────────────────────────────
-    if (sub === "removeadmin" || sub === "remove" || sub === "del") {
-      // عن طريق الرد على رسالة
-      const targetID = messageReply
-        ? String(messageReply.senderID)
-        : (Object.keys(event.mentions || {})[0] || args[1]);
+    const wantsRemove =
+      invokedAs === "removeadmin" ||
+      sub === "removeadmin" || sub === "remove" || sub === "del";
 
-      if (!targetID) {
+    if (wantsRemove) {
+      const targetID = messageReply && messageReply.senderID
+        ? String(messageReply.senderID)
+        : (Object.keys(event.mentions || {})[0] || args[1] || args[0]);
+
+      if (!targetID || targetID === "removeadmin") {
         return api.sendMessage(
           fmt.err("ارد على رسالة الشخص الذي تريد إزالة صلاحياته، أو مَنشن."),
           threadID
@@ -62,13 +75,13 @@ module.exports = {
       );
     }
 
-    // ── رفع مشرف (الحالة الافتراضية / addadmin) ────────────────────────────
-    // يجب الرد على رسالة العضو
-    const targetID = messageReply
+    // ── رفع مشرف (addadmin) ─────────────────────────────────────────────────
+    // الأولوية: رد على رسالة → منشن → ID مباشر في الأرقام
+    const targetID = messageReply && messageReply.senderID
       ? String(messageReply.senderID)
       : (Object.keys(event.mentions || {})[0] || args[0]);
 
-    if (!targetID || targetID === "addadmin") {
+    if (!targetID || targetID === "addadmin" || targetID === "مشرف") {
       return api.sendMessage(
         [
           fmt.header(),
