@@ -59,7 +59,10 @@ module.exports = {
 
       let done = 0, failed = 0;
       for (const uid of ids) {
-        try { await api.nickname("", threadID, uid); done++; } catch { failed++; }
+        try {
+          await new Promise((res, rej) => api.nickname("", threadID, uid, e => e ? rej(e) : res()));
+          done++;
+        } catch { failed++; }
         await new Promise(r => setTimeout(r, 400));
       }
 
@@ -107,29 +110,33 @@ module.exports = {
     const targetID   = mentionIDs[0];
     const targetName = (Object.values(mentions)[0] || "").replace(/@/, "") || targetID;
 
+    function _setNick(nick, tid, uid) {
+      return new Promise((res, rej) => api.nickname(nick, tid, uid, e => e ? rej(e) : res()));
+    }
+
     // ── set ─────────────────────────────────────────────────────────────────
     if (sub === "set") {
       const nick = args.slice(2).join(" ").trim();
       if (!nick) return api.sendMessage(fmt.err("مثال: " + prefix + "nickname set @شخص كنيتي"), threadID);
       try {
-        await api.nickname(nick, threadID, targetID);
+        await _setNick(nick, threadID, targetID);
         api.sendMessage(
           [fmt.header(), "", fmt.ok("تم تعيين الكنية لـ " + targetName + ".")].join("\n"),
           threadID
         );
-      } catch (e) { api.sendMessage(fmt.err("فشل: " + e.message), threadID); }
+      } catch (e) { api.sendMessage(fmt.err("فشل: " + (e.message || e)), threadID); }
     }
 
     // ── clear ────────────────────────────────────────────────────────────────
     else if (sub === "clear") {
       lockedNicknames.get(threadID)?.delete(targetID);
       try {
-        await api.nickname("", threadID, targetID);
+        await _setNick("", threadID, targetID);
         api.sendMessage(
           [fmt.header(), "", fmt.ok("تم حذف كنية " + targetName + ".")].join("\n"),
           threadID
         );
-      } catch (e) { api.sendMessage(fmt.err("فشل: " + e.message), threadID); }
+      } catch (e) { api.sendMessage(fmt.err("فشل: " + (e.message || e)), threadID); }
     }
 
     // ── lock ─────────────────────────────────────────────────────────────────
@@ -139,7 +146,7 @@ module.exports = {
       if (!lockedNicknames.has(threadID)) lockedNicknames.set(threadID, new Map());
       lockedNicknames.get(threadID).set(targetID, nick);
       try {
-        await api.nickname(nick, threadID, targetID);
+        await _setNick(nick, threadID, targetID);
         api.sendMessage(
           [
             fmt.header(),
