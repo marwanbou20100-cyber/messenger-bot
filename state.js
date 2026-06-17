@@ -51,7 +51,7 @@ function _serialize() {
     groupStats:    [...groupStats.entries()],
     replyDelay:    { ...replyDelay },
     autoReplies:   [...autoReplies.entries()].map(([tid, ar]) => [
-      tid, { message: ar.message, enabled: ar.enabled, cooldownMs: ar.cooldownMs }
+      tid, { message: ar.message, enabled: ar.enabled, cooldownMs: ar.cooldownMs, delayMs: ar.delayMs || 0 }
     ]),
   };
 }
@@ -80,7 +80,7 @@ function load() {
     for (const [tid, exp] of (data.mutedThreads || []))     if (exp > now) mutedThreads.set(tid, exp);
     for (const [tid, info] of (data.groupsCache || []))     groupsCache.set(tid, info);
     for (const [tid, stats] of (data.groupStats || []))     groupStats.set(tid, stats);
-    for (const [tid, ar] of (data.autoReplies || []))       autoReplies.set(tid, { ...ar, lastSent: new Map() });
+    for (const [tid, ar] of (data.autoReplies || []))       autoReplies.set(tid, { ...ar, delayMs: ar.delayMs || 0, lastSent: new Map() });
     if (data.replyDelay) { replyDelay.enabled = !!data.replyDelay.enabled; replyDelay.ms = data.replyDelay.ms || 1500; }
     logger.success("State", `Restored: ${lockedThreads.size} locked, ${mutedThreads.size} muted, ${groupsCache.size} groups.`);
     // Run eviction on load to clean up any stale data from before fix
