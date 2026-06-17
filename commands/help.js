@@ -51,18 +51,17 @@ module.exports = {
       fmt.inf("جميع الأوامر تبدأ بـ  " + p),
     );
 
-    // إرسال الـ GIF أولاً إن كان موجوداً
+    // 1) إرسال قائمة الأوامر نصياً أولاً
+    await api.sendMessage(lines.join("\n"), threadID);
+
+    // 2) إرسال الـ GIF بعدها إن كانت موجودة
     if (fs.existsSync(GIF_PATH)) {
       try {
         await api.sendMessage(
-          { body: lines.join("\n"), attachment: fs.createReadStream(GIF_PATH) },
+          { body: "", attachment: fs.createReadStream(GIF_PATH) },
           threadID
         );
-        return;
       } catch {}
     }
-
-    // fallback: نص فقط بدون GIF
-    api.sendMessage(lines.join("\n"), threadID);
   },
 };
