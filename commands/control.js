@@ -599,16 +599,18 @@ module.exports = {
       if (action === "show" || action === "status") {
         const ar = autoReplies.get(threadID);
         if (!ar || !ar.message) return api.sendMessage("🤖 لا يوجد رد تلقائي.\nالاستخدام: -control ar set [رسالة]", threadID);
+        const delaySec = ar.delayMs ? Math.round(ar.delayMs / 1000) : 0;
         return api.sendMessage([ "🤖 الرد التلقائي", "━━━━━━━━━━━━━━━━",
           "الحالة  : " + (ar.enabled ? "مفعّل ✅" : "معطّل ❌"),
           "الرسالة : " + ar.message,
           "الانتظار: " + Math.round(ar.cooldownMs / 60000) + " دقيقة/مستخدم",
+          "التأخير : " + (delaySec > 0 ? delaySec + " ثانية قبل الإرسال" : "فوري"),
         ].join("\n"), threadID);
       }
       if (action === "set") {
         const msg = args.slice(2).join(" ").trim();
         if (!msg) return api.sendMessage("❌ الاستخدام: -control ar set [رسالة]", threadID);
-        const ex = autoReplies.get(threadID) || { lastSent: new Map(), cooldownMs: 30 * 60000 };
+        const ex = autoReplies.get(threadID) || { lastSent: new Map(), cooldownMs: 30 * 60000, delayMs: 0 };
         autoReplies.set(threadID, { ...ex, message: msg, enabled: true });
         return api.sendMessage("🤖 تم تفعيل الرد التلقائي:\n" + msg, threadID);
       }
@@ -625,16 +627,29 @@ module.exports = {
       }
       if (action === "wait" || action === "cooldown") {
         const mins = parseInt(args[2]) || 30;
-        const ex   = autoReplies.get(threadID) || { message: "", enabled: false, lastSent: new Map() };
+        const ex   = autoReplies.get(threadID) || { message: "", enabled: false, lastSent: new Map(), delayMs: 0 };
         ex.cooldownMs = mins * 60000; autoReplies.set(threadID, ex);
         return api.sendMessage("⏱️ وقت الانتظار: " + mins + " دقيقة/مستخدم.", threadID);
       }
+      if (action === "delay" || action === "speed") {
+        const secs = parseInt(args[2]);
+        if (isNaN(secs) || secs < 0) return api.sendMessage("❌ الاستخدام: -control ar delay [ثواني]\nمثال: -control ar delay 5\nلإلغاء التأخير: -control ar delay 0", threadID);
+        if (secs > 300) return api.sendMessage("❌ الحد الأقصى للتأخير هو 300 ثانية (5 دقائق).", threadID);
+        const ex = autoReplies.get(threadID) || { message: "", enabled: false, lastSent: new Map(), cooldownMs: 30 * 60000 };
+        ex.delayMs = secs * 1000;
+        autoReplies.set(threadID, ex);
+        return api.sendMessage(secs === 0
+          ? "⚡ تم ضبط الرد التلقائي ليُرسل فوراً (بدون تأخير)."
+          : "⏱️ تم ضبط تأخير الرد التلقائي: " + secs + " ثانية قبل الإرسال.",
+        threadID);
+      }
       return api.sendMessage([
         "❓ الاستخدام:",
-        "  -control ar show       ← عرض الإعدادات",
-        "  -control ar set [رسالة]← رد جديد",
-        "  -control ar on / off   ← تشغيل/إيقاف",
-        "  -control ar wait [دق]  ← وقت الانتظار",
+        "  -control ar show         ← عرض الإعدادات",
+        "  -control ar set [رسالة]  ← رد جديد (النص كما هو بدون تعديل)",
+        "  -control ar on / off     ← تشغيل/إيقاف",
+        "  -control ar wait [دق]    ← وقت الانتظار بين كل رد ورد",
+        "  -control ar delay [ثواني]← تأخير الرد (0 = فوري)",
       ].join("\n"), threadID);
     }
 
