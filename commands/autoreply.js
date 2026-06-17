@@ -46,7 +46,10 @@ function _restoreSchedules(api) {
 function _startTimer(entry, api) {
   entry.timer = setInterval(() => {
     entry.nextAt = Date.now() + entry.intervalMs;
-    api.sendMessage(entry.message, entry.threadID).catch(() => {});
+    try {
+      const result = api.sendMessage(entry.message, entry.threadID);
+      if (result && typeof result.catch === "function") result.catch(() => {});
+    } catch {}
   }, entry.intervalMs);
   entry.timer.unref?.();
   entry.nextAt = Date.now() + entry.intervalMs;
