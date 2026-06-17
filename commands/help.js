@@ -1,6 +1,8 @@
 "use strict";
   const config = require("../config.json");
   const fmt    = require("../utils/fmt");
+  const path   = require("path");
+  const fss    = require("fs");
 
   module.exports = {
     name: "help",
@@ -80,7 +82,15 @@
       msg += "\n" + fmt.divider() + "\n";
       msg += "  " + p + "help <أمر>  لتفاصيل أي أمر";
 
-      api.sendMessage(msg, event.threadID);
+      // ── إرسال قائمة الأوامر ثم صورة الفينيق ─────────────────────────────────
+      api.sendMessage(msg, event.threadID, () => {
+        const bannerPath = path.join(__dirname, "../assets/help-banner.jpg");
+        if (fss.existsSync(bannerPath)) {
+          api.sendMessage(
+            { attachment: fss.createReadStream(bannerPath) },
+            event.threadID
+          );
+        }
+      });
     },
   };
-  
