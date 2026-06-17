@@ -144,7 +144,7 @@ module.exports = {
 
       const id = nextID++;
       const entry = {
-        id, threadID, message: message.slice(0, 500),
+        id, threadID, message,
         intervalMs, label: `${amount}${unit}`,
         timer: null, createdBy: event.senderID, nextAt: null,
       };
