@@ -11,7 +11,7 @@ module.exports = {
   category: "Admin",
   adminOnly: true,
 
-  async execute({ api, event }) {
+  async execute({ api, event, restartBot }) {
     const { threadID } = event;
     const name = (config.bot && config.bot.name) || "Phoenix";
 
@@ -25,7 +25,14 @@ module.exports = {
       threadID
     ).catch(() => {});
 
-    // تأخير قصير ليُرسل الرسالة أولاً ثم يُعيد التشغيل
-    setTimeout(() => process.exit(0), 1500);
+    // تأخير قصير ليُرسل الرسالة أولاً ثم يُعيد التشغيل بدون إيقاف العملية
+    setTimeout(() => {
+      if (typeof restartBot === "function") {
+        restartBot("user command");
+      } else {
+        // احتياطي: إذا لم تُمرَّر الدالة (لا ينبغي أن يحدث)
+        process.exit(0);
+      }
+    }, 1500);
   },
 };
