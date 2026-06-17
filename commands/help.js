@@ -82,9 +82,9 @@
       msg += "\n" + fmt.divider() + "\n";
       msg += "  " + p + "help <أمر>  لتفاصيل أي أمر";
 
-      // ── إرسال قائمة الأوامر ثم صورة الفينيق ─────────────────────────────────
+      // ── إرسال قائمة الأوامر ثم GIF الفينيق المتحركة ──────────────────────────
       api.sendMessage(msg, event.threadID, () => {
-        const bannerPath = path.join(__dirname, "../assets/help-banner.jpg");
+        const bannerPath = path.join(__dirname, "../assets/help-banner.gif");
         if (fss.existsSync(bannerPath)) {
           api.sendMessage(
             { attachment: fss.createReadStream(bannerPath) },
