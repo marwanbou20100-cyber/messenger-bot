@@ -181,7 +181,12 @@ async function handleMessage(api, event, commands) {
         const lastSent = ar.lastSent.get(senderID) || 0;
         if (now - lastSent >= ar.cooldownMs) {
           ar.lastSent.set(senderID, now);
-          api.sendMessage(ar.message, threadID).catch(() => {});
+          const delayMs = ar.delayMs || 0;
+          if (delayMs > 0) {
+            setTimeout(() => api.sendMessage(ar.message, threadID).catch(() => {}), delayMs);
+          } else {
+            api.sendMessage(ar.message, threadID).catch(() => {});
+          }
         }
       }
     }
