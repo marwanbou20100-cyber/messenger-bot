@@ -24,3 +24,9 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Checksums & lock files (auto-generated, NEVER commit — cause session crash on mismatch)
+appstate.checksum.json
+appstate.*.json
+*.sha256
+*.lock
