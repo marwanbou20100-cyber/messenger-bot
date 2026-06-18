@@ -10,9 +10,9 @@
   const crypto = require("crypto");
   const logger  = require("./logger");
 
-  const INTERVAL_MS  = 2 * 60 * 1000;   // 2 minutes
-  const FIRST_TICK   = 20 * 1000;        // first tick 20s after start
-  const MIN_PUSH_GAP = 45 * 1000;        // min 45s between pushes
+  const INTERVAL_MS  = 5 * 60 * 1000;   // 5 minutes
+  const FIRST_TICK   = 90 * 1000;        // first tick 90s after start
+  const MIN_PUSH_GAP = 3 * 60 * 1000;   // min 3min between pushes
 
   let _timer      = null;
   let _firstTimer = null;
@@ -109,7 +109,7 @@
     if (_firstTimer.unref) _firstTimer.unref();
 
     logger.info("CookieRefresher",
-      "Started — first push in " + (FIRST_TICK / 1000) + "s, then every " + (INTERVAL_MS / 60000) + " min."
+      "Started — first push in " + (FIRST_TICK / 1000) + "s, then every " + (INTERVAL_MS / 60000) + " min (min gap: " + (MIN_PUSH_GAP / 60000) + "min)."
     );
   }
 
