@@ -175,8 +175,8 @@
           const raw  = fs.readFileSync(file, "utf8");
 
           if (checksum && !this._verifyChecksum(file, raw)) {
-            logger.error("Session", `${label}: checksum mismatch — treating as corrupted, trying backup.`);
-            continue;
+            logger.warn("Session", `${label}: checksum mismatch — loading anyway (checksum file may be stale/wrong). Will re-hash on next save.`);
+            // Non-fatal: do NOT skip. A wrong checksum.json in the repo should never kill the bot.
           }
 
           const data = JSON.parse(raw);
@@ -206,7 +206,7 @@
       logger.fatal("Session", "ALL SESSION SOURCES INVALID OR MISSING");
       logger.fatal("Session", "Export fresh Facebook cookies → save as appstate.json");
       logger.fatal("Session", "═══════════════════════════════════════════════");
-      process.exit(1);
+      setTimeout(() => process.exit(1), 3000);
     }
 
     // ── Cookie expiry pruning ─────────────────────────────────────────────────
