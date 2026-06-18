@@ -2,7 +2,7 @@
 
 const fmt               = require("../utils/fmt");
 const config            = require("../config.json");
-const { lockedNicknames } = require("../utils/nicknameLocks");
+const { lockedNicknames, clearThread } = require("../utils/nicknameLocks");
 
 module.exports = {
   name: "nickname",
@@ -53,7 +53,7 @@ module.exports = {
     // ── unlockall: فك قفل جميع الكنيات ─────────────────────────────────────
     if (sub === "unlockall") {
       const count = (lockedNicknames.get(threadID) || new Map()).size;
-      lockedNicknames.delete(threadID);
+      clearThread(threadID);
       return api.sendMessage(
         [
           fmt.header(),
@@ -89,7 +89,7 @@ module.exports = {
         await new Promise(r => setTimeout(r, 450));
       }
 
-      lockedNicknames.delete(threadID);
+      clearThread(threadID);
 
       return api.sendMessage(
         [
