@@ -35,6 +35,7 @@ let _api     = null;
 let _cfg     = { ...DEFAULT_CONFIG };
 let _timers  = [];
 let _running = false;
+let _actionLock = false; // mutex: prevents 2 behaviors running simultaneously
 let _stats   = {
   startedAt:        null,
   presenceSent:     0,
@@ -82,16 +83,29 @@ function _schedule(fn, delayMs) {
   _timers.push(t);
 }
 
+
+// ── Mutex wrapper — only one behaviour runs at a time ────────────────────────
+async function _guarded(label, fn) {
+  if (_actionLock) {
+    logger.debug("HumanSim", "[skip] " + label + " — another action is running.");
+    return;
+  }
+  _actionLock = true;
+  try { await fn(); }
+  catch (e) { logger.debug("HumanSim", label + " error: " + e.message); }
+  finally { _actionLock = false; }
+}
+
 // ── 1. Presence heartbeat ─────────────────────────────────────────────────────
 function _doPresence() {
   _schedule(async () => {
     if (!_running || !_api) return;
-    try {
+    await _guarded("presence", async () => {
       if (typeof _api.setOptions === "function") _api.setOptions({ online: true });
       _stats.presenceSent++;
       _record("presence");
-      logger.debug("HumanSim", `Presence heartbeat #${_stats.presenceSent}`);
-    } catch (e) { logger.debug("HumanSim", `Presence error: ${e.message}`); }
+      logger.debug("HumanSim", "Presence heartbeat #" + _stats.presenceSent);
+    });
     _doPresence();
   }, _jitter(_cfg.presenceIntervalMs));
 }
@@ -391,6 +405,7 @@ function start(api, userConfig = {}) {
 
 function stop() {
   _running = false;
+  _actionLock = false;
   for (const t of _timers) clearTimeout(t);
   _timers = [];
   logger.info("HumanSim", "Stopped.");
