@@ -39,11 +39,35 @@ module.exports = {
           threadID
         ).catch(() => {});
       }
-      const lines = [fmt.header(), "", "👑  مشرفو البوت", fmt.divider()];
+
+      // جلب أسماء المشرفين من Facebook
+      let nameMap = {};
+      try {
+        const info = await api.getUserInfo(list);
+        nameMap = info || {};
+      } catch {}
+
+      const lines = [
+        fmt.header("قائمة مشرفي البوت"),
+        "",
+        "👑  مشرفو البوت  (" + list.length + ")",
+        fmt.divider(),
+      ];
+
       list.forEach((id, i) => {
-        const tag = i === 0 ? "  (مشرف رئيسي)" : "";
-        lines.push("  " + (i + 1) + ".  " + id + tag);
+        const name  = nameMap[id]?.name || nameMap[id]?.fullName || null;
+        const badge = i === 0 ? "👑 مشرف رئيسي" : "🛡️ مشرف";
+        const label = name ? name : "مستخدم";
+        lines.push(
+          "  " + (i + 1) + ".  " + label,
+          "      🆔  " + id + "  •  " + badge
+        );
+        if (i < list.length - 1) lines.push(fmt.thin());
       });
+
+      lines.push(fmt.divider());
+      lines.push(fmt.inf("المجموع: " + list.length + " مشرف" + (list.length === 1 ? "" : "ين")));
+
       return api.sendMessage(lines.join("\n"), threadID).catch(() => {});
     }
 
@@ -67,10 +91,13 @@ module.exports = {
         return api.sendMessage(fmt.err("لا يمكن إزالة المشرف الرئيسي."), threadID).catch(() => {});
       }
       const removed = botAdmins.remove(targetID);
+      if (!removed) {
+        return api.sendMessage(fmt.wrn("هذا المستخدم ليس مشرفاً."), threadID).catch(() => {});
+      }
+      let removeName = targetID;
+      try { const i = await api.getUserInfo([targetID]); removeName = i?.[targetID]?.name || targetID; } catch {}
       return api.sendMessage(
-        removed
-          ? [fmt.header(), "", fmt.ok("تمت إزالة صلاحيات المشرف لـ " + targetID + ".")].join("\n")
-          : fmt.wrn("هذا المستخدم ليس مشرفاً."),
+        [fmt.header(), "", fmt.ok("تمت إزالة صلاحيات " + removeName + ".  🚫")].join("\n"),
         threadID
       ).catch(() => {});
     }
@@ -99,15 +126,18 @@ module.exports = {
     }
 
     const added = botAdmins.add(targetID);
+    if (!added) {
+      return api.sendMessage(fmt.wrn("هذا المستخدم مشرف بالفعل."), threadID).catch(() => {});
+    }
+    let addName = targetID;
+    try { const i = await api.getUserInfo([targetID]); addName = i?.[targetID]?.name || targetID; } catch {}
     return api.sendMessage(
-      added
-        ? [
-            fmt.header(),
-            "",
-            fmt.ok("تم رفع " + targetID + " لمشرف بوت. 👑"),
-            fmt.inf("يمكنه الآن استخدام جميع أوامر الأدمن."),
-          ].join("\n")
-        : fmt.wrn("هذا المستخدم مشرف بالفعل."),
+      [
+        fmt.header(),
+        "",
+        fmt.ok("تم رفع " + addName + " لمشرف بوت. 👑"),
+        fmt.inf("يمكنه الآن استخدام جميع أوامر الأدمن."),
+      ].join("\n"),
       threadID
     ).catch(() => {});
   },
