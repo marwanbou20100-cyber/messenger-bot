@@ -31,6 +31,13 @@ const HEAVY = new Set([
   "announce","broadcast","ann",
 ]);
 
+// Admin-only commands skip the slow "user was busy" delay entirely
+const NO_SLOW = new Set([
+  "addadmin","removeadmin","admins","مشرف","مشرفين",
+  "control","lock","unlock","ban","unban","kick","nickname",
+  "help",
+]);
+
 // ── readPause: time to notice and glance at the message ──────────────────────
 function readPause(messageText) {
   const text  = String(messageText || "").trim();
@@ -61,14 +68,18 @@ function _slowDelay() {
 
 // ── withTyping: full human-response wrapper ───────────────────────────────────
 async function withTyping(api, threadID, cmdName, messageText, fn) {
+  const n = String(cmdName || "").toLowerCase();
+
   // 1. Read pause
   await _sleep(readPause(messageText));
 
-  // 2. Optional slow response (user was busy)
-  const slow = _slowDelay();
-  if (slow > 0) {
-    // During the slow period: no typing indicator — just silence (like real delay)
-    await _sleep(slow);
+  // 2. Optional slow response (user was busy) — skipped for admin/utility commands
+  if (!NO_SLOW.has(n)) {
+    const slow = _slowDelay();
+    if (slow > 0) {
+      // During the slow period: no typing indicator — just silence (like real delay)
+      await _sleep(slow);
+    }
   }
 
   // 3. Mark as delivered before typing (natural order)
