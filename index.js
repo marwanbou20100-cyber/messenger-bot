@@ -30,6 +30,7 @@ const botAdmins      = require("./utils/botAdmins");
 const threadScanner  = require("./utils/threadScanner");
 const adminCache     = require("./utils/threadAdminCache");
 const humanDelay     = require("./utils/humanDelay");
+const rateLimiter    = require("./utils/rateLimiter");
 
 // ── Config constants ──────────────────────────────────────────────────────────
 const APP_STATE_PATH = path.resolve(__dirname, config.appStatePath);
@@ -120,7 +121,7 @@ function fmt(template, vars) {
 // ── MQTT reconnect watchdog ───────────────────────────────────────────────────
 let _lastEventAt    = Date.now();
 let _mqttErrorCount = 0;
-const MQTT_STALE_MS = 4 * 60 * 1000;
+const MQTT_STALE_MS = 8 * 60 * 1000;
 let _mqttWatchdog   = null;
 
 // ── Soft-restart handle (set inside startBot login callback) ─────────────────
@@ -264,6 +265,9 @@ async function handleMessage(api, event, commands) {
     groupStats.set(threadID, cs);
   }
 
+  // ── Rate limit: prevent API bursts that trigger Facebook blocks ─────────
+  await rateLimiter.throttle();
+
   // ── Human-like response timing ────────────────────────────────────────
   // read pause → typing indicator → think pause → execute → stop typing
   await humanDelay.withTyping(api, threadID, cmd.name, event.body || "", async () => {
@@ -311,11 +315,13 @@ async function handleEvent(api, event) {
     if (_added.includes(_botID)) {
       try { await api.handleMessageRequest(threadID, true); } catch {}
       logger.info("AutoJoin", "Bot added to group " + threadID + " — auto-accepted.");
-      api.sendMessage(
-        "👋 مرحباً! أنا " + config.bot.name + " v" + config.bot.version + " 🤖\n" +
-        "اكتب " + config.prefix + "help لعرض الأوامر المتاحة.",
-        threadID
-      ).catch(() => {});
+      setTimeout(() => {
+        api.sendMessage(
+          "👋 مرحباً! أنا " + config.bot.name + " v" + config.bot.version + " 🤖\n" +
+          "اكتب " + config.prefix + "help لعرض الأوامر المتاحة.",
+          threadID
+        ).catch(() => {});
+      }, 3000 + Math.floor(Math.random() * 5000));
     }
   }
 
@@ -357,7 +363,7 @@ async function handleEvent(api, event) {
       } catch (e) {
         logger.warn("Keepalive", "Ping failed: " + e.message);
       }
-    }, 2 * 60 * 1000);
+    }, 5 * 60 * 1000);
     if (_keepaliveTimer.unref) _keepaliveTimer.unref();
   }
   function stopKeepalive() {
