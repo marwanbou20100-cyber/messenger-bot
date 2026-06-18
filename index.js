@@ -351,7 +351,7 @@ async function handleEvent(api, event) {
 }
 
 
-  // ── Keepalive ping every 2 minutes ───────────────────────────────────────────
+  // ── Keepalive ping every 5 minutes ─────────────────────────────────────────────
   let _keepaliveTimer = null;
   function startKeepalive(api) {
     if (_keepaliveTimer) clearInterval(_keepaliveTimer);
@@ -436,7 +436,7 @@ function startBot() {
       logger.warn("AppState", "Post-login save failed: " + e.message);
     }
 
-    // ── Start cookie auto-refresher (every 4 minutes) ─────────────────────
+    // ── Start cookie auto-refresher v3 (every 5 minutes, mutex-protected) ──
     cookieRefresher.start(api, session);
     setCookieRefresher(cookieRefresher);
 
@@ -481,10 +481,10 @@ function startBot() {
     _lastEventAt = Date.now();
 
     // ── Internal soft-restart (no process.exit) ───────────────────────────
-    _restartBot = function restartBot(reason) {
+    _restartBot = async function restartBot(reason) {
       logger.info("Bot", "Soft restart requested" + (reason ? ": " + reason : "") + " — restarting in 3s...");
       setBotStatus("offline — restarting...");
-      try { if (typeof cookieRefresher.emergencyFlush === "function") cookieRefresher.emergencyFlush().catch(() => {}); } catch {}
+      try { if (typeof cookieRefresher.emergencyFlush === "function") await cookieRefresher.emergencyFlush(); } catch {}
       cookieRefresher.stop();
       humanSimulator.stop();
       stopKeepalive();
