@@ -381,7 +381,7 @@
           headers: {
             "Authorization": `token ${this.ghToken}`,
             "Accept":        "application/vnd.github.v3+json",
-            "User-Agent":    "madox-bot-session/3",
+            "User-Agent":    "phoenix-bot-session/3",
             "Content-Type":  "application/json",
             ...(bodyBuf ? { "Content-Length": bodyBuf.length } : {}),
           },
