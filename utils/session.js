@@ -277,7 +277,7 @@
       if (!acquired) {
         // Wait 2s then try once more
         logger.warn("Session", "Lock busy — will retry save in 2s.");
-        setTimeout(() => this.save(state), 2000);
+        setTimeout(() => this.saveAndPush(state).catch(() => {}), 2000);
         return false;
       }
 
