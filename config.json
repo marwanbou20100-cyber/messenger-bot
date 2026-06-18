@@ -15,21 +15,21 @@
   },
   "features": {
     "autoSaveAppState": true,
-    "autoSaveIntervalMs": 900000,
+    "autoSaveIntervalMs": 1800000,
     "greetNewMembers": false,
     "farewellMembers": false,
     "antiSpam": true,
-    "antiSpamCooldownMs": 2000,
-    "logMessages": true
+    "antiSpamCooldownMs": 3000,
+    "logMessages": false
   },
   "humanSimulator": {
     "enabled": true,
-    "presenceIntervalMs": 300000,
-    "typingIntervalMs": 480000,
-    "readIntervalMs": 180000,
-    "jitterMs": 30000,
+    "presenceIntervalMs": 600000,
+    "typingIntervalMs": 900000,
+    "readIntervalMs": 420000,
+    "jitterMs": 90000,
     "maxTypingMs": 4000,
-    "maxGroupsPerCycle": 3
+    "maxGroupsPerCycle": 2
   },
   "dashboard": {
     "apiKey": "changeme-set-a-strong-secret",
@@ -50,13 +50,21 @@
     "selfListen": false,
     "listenEvents": true,
     "listenTyping": false,
-    "autoMarkRead": false,
-    "autoMarkDelivery": false,
+    "autoMarkRead": true,
+    "autoMarkDelivery": true,
     "autoReconnect": true,
     "simulateTyping": false,
     "forceLogin": false,
-    "maxConcurrentRequests": 3,
-    "maxRequestsPerMinute": 30,
-    "requestCooldownMs": 2000
+    "maxConcurrentRequests": 2,
+    "maxRequestsPerMinute": 18,
+    "requestCooldownMs": 3500
+  },
+  "rateLimit": {
+    "_comment": "Global API rate-limiting — tune these to avoid Facebook blocks.",
+    "maxRequestsPerWindow": 18,
+    "windowMs": 60000,
+    "minDelayBetweenMs": 1200,
+    "maxDelayBetweenMs": 3500,
+    "burstCooldownMs": 8000
   }
 }
