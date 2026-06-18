@@ -37,14 +37,14 @@ module.exports = {
         return api.sendMessage(
           [fmt.header(), "", fmt.wrn("لا يوجد مشرفو بوت مسجلون.")].join("\n"),
           threadID
-        );
+        ).catch(() => {});
       }
       const lines = [fmt.header(), "", "👑  مشرفو البوت", fmt.divider()];
       list.forEach((id, i) => {
         const tag = i === 0 ? "  (مشرف رئيسي)" : "";
         lines.push("  " + (i + 1) + ".  " + id + tag);
       });
-      return api.sendMessage(lines.join("\n"), threadID);
+      return api.sendMessage(lines.join("\n"), threadID).catch(() => {});
     }
 
     // ── إزالة مشرف ─────────────────────────────────────────────────────────
@@ -61,10 +61,10 @@ module.exports = {
         return api.sendMessage(
           fmt.err("ارد على رسالة الشخص الذي تريد إزالة صلاحياته، أو مَنشن."),
           threadID
-        );
+        ).catch(() => {});
       }
       if (botAdmins.isPrimary(targetID)) {
-        return api.sendMessage(fmt.err("لا يمكن إزالة المشرف الرئيسي."), threadID);
+        return api.sendMessage(fmt.err("لا يمكن إزالة المشرف الرئيسي."), threadID).catch(() => {});
       }
       const removed = botAdmins.remove(targetID);
       return api.sendMessage(
@@ -72,7 +72,7 @@ module.exports = {
           ? [fmt.header(), "", fmt.ok("تمت إزالة صلاحيات المشرف لـ " + targetID + ".")].join("\n")
           : fmt.wrn("هذا المستخدم ليس مشرفاً."),
         threadID
-      );
+      ).catch(() => {});
     }
 
     // ── رفع مشرف (addadmin) ─────────────────────────────────────────────────
@@ -91,11 +91,11 @@ module.exports = {
           fmt.row("القائمة",    config.prefix + "admins",                                      "📋"),
         ].join("\n"),
         threadID
-      );
+      ).catch(() => {});
     }
 
     if (String(targetID) === String(senderID)) {
-      return api.sendMessage(fmt.err("لا يمكنك رفع نفسك."), threadID);
+      return api.sendMessage(fmt.err("لا يمكنك رفع نفسك."), threadID).catch(() => {});
     }
 
     const added = botAdmins.add(targetID);
@@ -109,6 +109,6 @@ module.exports = {
           ].join("\n")
         : fmt.wrn("هذا المستخدم مشرف بالفعل."),
       threadID
-    );
+    ).catch(() => {});
   },
 };
