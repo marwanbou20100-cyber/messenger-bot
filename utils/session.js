@@ -353,6 +353,13 @@
         const tmpPath    = this.filePath + ".emergency.tmp";
         fs.writeFileSync(tmpPath, serialized, "utf8");
         fs.renameSync(tmpPath, this.filePath);
+
+        // ✅ CRITICAL FIX: always update sha256 after writing the file
+        const checksum = this._sha256(serialized);
+        if (checksum) {
+          fs.writeFileSync(this._checksumPath, checksum, "utf8");
+        }
+
         // Also write backup #0 (emergency)
         const emergBackup = this.filePath.replace(/\.json$/, ".emergency.json");
         fs.writeFileSync(emergBackup, serialized, "utf8");
