@@ -15,6 +15,7 @@ const antiSpam           = require("./utils/antiSpam");
 const banManager         = require("./utils/banManager");
 const { lockedNames }    = require("./utils/lockedNames");
 const nicknameLocks      = require("./utils/nicknameLocks");
+const { revertIfLocked } = nicknameLocks;
 const health             = require("./utils/health");
 const diagnostics        = require("./utils/diagnostics");
 const { startupSelfCheck, schedule: scheduleMaintenance } = require("./utils/maintenance");
@@ -287,6 +288,17 @@ async function handleEvent(api, event) {
     if (locked && newName && newName !== locked) {
       try { await api.gcname(locked, threadID); }
       catch (e) { logger.error("LockName", "Failed to revert group name: " + e.message); }
+    }
+  }
+
+  // ── Instant nickname revert when a locked member changes their nickname ──
+  if (logMessageType === "log:nickname" || logMessageType === "log:user-nickname") {
+    const changedUID = String(
+      logMessageData?.participant_id || logMessageData?.userID ||
+      logMessageData?.participantId  || logMessageData?.userId  || ""
+    );
+    if (changedUID) {
+      revertIfLocked(threadID, changedUID).catch(() => {});
     }
   }
 
